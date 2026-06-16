@@ -51,3 +51,9 @@ public interface ITokenService
 {
     AuthTokenResponse Create(User user);
 }
+
+public interface IAuditLogRepository
+{
+    Task AddAsync(AuditLog log, CancellationToken cancellationToken = default);
+    Task<IReadOnlyCollection<AuditLog>> ListAsync(string? entityName, string? entityId, CancellationToken cancellationToken = default);
+}

@@ -11,6 +11,7 @@ public static class DependencyInjection
         .AddSingleton<IRoleChangeRequestRepository, InMemoryRoleChangeRequestRepository>()
         .AddSingleton<IPreacherRequestRepository, InMemoryPreacherRequestRepository>()
         .AddSingleton<IPreachingLetterRepository, InMemoryPreachingLetterRepository>()
+        .AddSingleton<IAuditLogRepository, InMemoryAuditLogRepository>()
         .AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>()
         .AddSingleton<ITokenService, DemoTokenService>();
 }

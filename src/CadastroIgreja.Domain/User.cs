@@ -1,7 +1,7 @@
 namespace CadastroIgreja.Domain;
 
 public enum MemberRole { Membro, Diacono, Presbitero, Pastor, Dirigente }
-public enum UserStatus { Pending, Approved }
+public enum UserStatus { Pending, Approved, Rejected, Suspended }
 
 public sealed class User
 {

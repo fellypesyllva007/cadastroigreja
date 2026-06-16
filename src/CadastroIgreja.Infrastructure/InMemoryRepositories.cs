@@ -94,3 +94,23 @@ public sealed class InMemoryPreachingLetterRepository : IPreachingLetterReposito
     }
     public Task SaveAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 }
+
+
+public sealed class InMemoryAuditLogRepository : IAuditLogRepository
+{
+    private readonly ConcurrentDictionary<long, AuditLog> _logs = new();
+
+    public Task AddAsync(AuditLog log, CancellationToken cancellationToken = default)
+    {
+        _logs[log.Id] = log;
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyCollection<AuditLog>> ListAsync(string? entityName, string? entityId, CancellationToken cancellationToken = default)
+    {
+        var query = _logs.Values.AsEnumerable();
+        if (!string.IsNullOrWhiteSpace(entityName)) query = query.Where(l => l.EntityName.Equals(entityName, StringComparison.OrdinalIgnoreCase));
+        if (!string.IsNullOrWhiteSpace(entityId)) query = query.Where(l => l.EntityId.Equals(entityId, StringComparison.OrdinalIgnoreCase));
+        return Task.FromResult<IReadOnlyCollection<AuditLog>>(query.OrderByDescending(l => l.CreatedAt).ToArray());
+    }
+}

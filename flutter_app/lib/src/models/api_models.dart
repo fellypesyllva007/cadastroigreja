@@ -124,6 +124,7 @@ class UserProfile {
   final String email;
   final String? phone;
   final String churchId;
+  final String preacherRequestId;
   final MemberRole role;
   final String status;
 
@@ -139,7 +140,7 @@ class UserProfile {
 }
 
 class RoleChangeRequest {
-  RoleChangeRequest({required this.id, required this.userId, required this.requestedRole, required this.status, required this.createdAt, this.decidedAt});
+  RoleChangeRequest({required this.id, required this.userId, required this.requestedRole, required this.status, required this.createdAt, this.decidedAt, this.justification});
 
   final String id;
   final String userId;
@@ -147,6 +148,7 @@ class RoleChangeRequest {
   final RequestStatus status;
   final DateTime createdAt;
   final DateTime? decidedAt;
+  final String? justification;
 
   factory RoleChangeRequest.fromJson(Map<String, dynamic> json) => RoleChangeRequest(
         id: json['id'] as String,
@@ -155,11 +157,12 @@ class RoleChangeRequest {
         status: RequestStatusApi.fromApi(json['status'] as String),
         createdAt: DateTime.parse(json['createdAt'] as String),
         decidedAt: json['decidedAt'] == null ? null : DateTime.parse(json['decidedAt'] as String),
+        justification: json['justification'] as String?,
       );
 }
 
 class PreacherRequest {
-  PreacherRequest({required this.id, required this.userId, required this.churchId, required this.status, required this.currentStep, required this.createdAt, this.decidedAt, this.letterId});
+  PreacherRequest({required this.id, required this.userId, required this.churchId, required this.status, required this.currentStep, required this.createdAt, this.decidedAt, this.letterId, this.notes});
 
   final String id;
   final String userId;
@@ -169,6 +172,7 @@ class PreacherRequest {
   final DateTime createdAt;
   final DateTime? decidedAt;
   final String? letterId;
+  final String? notes;
 
   factory PreacherRequest.fromJson(Map<String, dynamic> json) => PreacherRequest(
         id: json['id'] as String,
@@ -179,27 +183,55 @@ class PreacherRequest {
         createdAt: DateTime.parse(json['createdAt'] as String),
         decidedAt: json['decidedAt'] == null ? null : DateTime.parse(json['decidedAt'] as String),
         letterId: json['letterId'] as String?,
+        notes: json['notes'] as String?,
       );
 }
 
 class PreachingLetter {
-  PreachingLetter({required this.id, required this.userId, required this.churchId, required this.number, required this.issuedAt, required this.validUntil, required this.suspended});
+  PreachingLetter({required this.id, required this.userId, required this.churchId, required this.preacherRequestId, required this.number, required this.issuedAt, required this.validUntil, required this.suspended, required this.validationUrl});
 
   final String id;
   final String userId;
   final String churchId;
+  final String preacherRequestId;
   final String number;
   final DateTime issuedAt;
   final DateTime validUntil;
   final bool suspended;
+  final String validationUrl;
 
   factory PreachingLetter.fromJson(Map<String, dynamic> json) => PreachingLetter(
         id: json['id'] as String,
         userId: json['userId'] as String,
         churchId: json['churchId'] as String,
+        preacherRequestId: json['preacherRequestId'] as String,
         number: json['number'] as String,
         issuedAt: DateTime.parse(json['issuedAt'] as String),
         validUntil: DateTime.parse(json['validUntil'] as String),
         suspended: json['suspended'] as bool,
+        validationUrl: json['validationUrl'] as String,
+      );
+}
+
+
+class AuditLogEntry {
+  AuditLogEntry({required this.id, required this.action, required this.entityName, required this.entityId, required this.createdAt, this.userId, this.metadata});
+
+  final int id;
+  final String? userId;
+  final String action;
+  final String entityName;
+  final String entityId;
+  final String? metadata;
+  final DateTime createdAt;
+
+  factory AuditLogEntry.fromJson(Map<String, dynamic> json) => AuditLogEntry(
+        id: json['id'] as int,
+        userId: json['userId'] as String?,
+        action: json['action'] as String,
+        entityName: json['entityName'] as String,
+        entityId: json['entityId'] as String,
+        metadata: json['metadata'] as String?,
+        createdAt: DateTime.parse(json['createdAt'] as String),
       );
 }

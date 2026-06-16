@@ -10,5 +10,6 @@ public static class DependencyInjection
         .AddScoped<UserService>()
         .AddScoped<RoleChangeRequestService>()
         .AddScoped<PreacherRequestService>()
-        .AddScoped<PreachingLetterService>();
+        .AddScoped<PreachingLetterService>()
+        .AddScoped<AuditLogService>();
 }
