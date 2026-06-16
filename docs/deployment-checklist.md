@@ -12,10 +12,10 @@ Este projeto ainda está na fase de fundação técnica. Use este checklist para
 
 ## Ainda não pronto para uso por usuários finais
 
-- O backend ASP.NET Core ainda não foi implementado.
-- O frontend Flutter ainda não foi implementado.
-- Autenticação JWT, upload de arquivos, geração de PDF e QR Code ainda são contratos/documentação, não funcionalidades executáveis.
-- O arquivo OpenAPI é uma especificação inicial e ainda precisa ser conectado a uma API real.
+- A API ASP.NET Core já possui endpoints iniciais de autenticação, igrejas, usuários, solicitações, aprovações de pregador e cartas, mas ainda usa infraestrutura em memória para desenvolvimento.
+- O app Flutter já possui telas funcionais de login, perfil, igrejas e fluxos de solicitações, mas ainda precisa de validações de permissão por perfil e acabamento de UX.
+- Autenticação JWT de produção, upload de arquivos, geração de PDF e QR Code ainda são contratos/documentação, não funcionalidades executáveis.
+- O arquivo OpenAPI é uma especificação inicial e ainda precisa ser mantido sincronizado com a API real.
 
 ## Smoke test sugerido no servidor
 
@@ -52,7 +52,7 @@ Resultado esperado: `Membro`, `Diacono`, `Presbitero`, `Pastor`, `Dirigente`.
 
 ## Próximo marco de desenvolvimento
 
-1. Criar a solution ASP.NET Core 9 com camadas `Api`, `Application`, `Domain` e `Infrastructure`.
-2. Implementar autenticação, registro e login usando as tabelas de usuários e refresh tokens.
-3. Implementar endpoints de igrejas e usuários conforme `openapi/cadastroigreja.v1.yaml`.
-4. Adicionar testes automatizados de regras de hierarquia e permissões.
+1. Substituir repositórios em memória por persistência PostgreSQL com migrations versionadas.
+2. Trocar o token demonstrativo por JWT Bearer assinado e refresh tokens persistidos.
+3. Implementar matriz de permissões por hierarquia para aprovações, gestão de igrejas e emissão/suspensão de cartas.
+4. Adicionar testes automatizados de regras de hierarquia, contratos HTTP e fluxos Flutter.

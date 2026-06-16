@@ -63,7 +63,7 @@ class _Home extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           children: [
             ListTile(title: Text(profile.fullName), subtitle: Text(profile.email), leading: const CircleAvatar(child: Icon(Icons.person))),
-            ListTile(title: const Text('Cargo'), subtitle: Text(profile.role)),
+            ListTile(title: const Text('Cargo'), subtitle: Text(profile.role.label)),
             ListTile(title: const Text('Status'), subtitle: Text(profile.status)),
             ListTile(title: const Text('Igreja'), subtitle: Text(profile.churchId)),
           ],
