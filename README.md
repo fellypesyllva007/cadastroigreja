@@ -271,3 +271,11 @@ O banco é inicializado com as migrações em `database/migrations`. A especific
 # Licença
 
 Projeto privado.
+
+---
+
+# Estado atual do projeto
+
+O projeto possui documentação funcional, contrato inicial de API, Docker Compose para PostgreSQL e migration inicial do banco de dados. Consulte `docs/deployment-checklist.md` antes de publicar em servidor.
+
+Nesta fase, o que pode ser testado no servidor é a criação da base PostgreSQL e validação do modelo de dados. Backend ASP.NET Core e frontend Flutter ainda precisam ser implementados antes de liberar uso por usuários finais.
