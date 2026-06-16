@@ -219,6 +219,21 @@ A carta conterá:
 
 # Segurança
 
+- Senhas armazenadas exclusivamente como hash forte.
+- Tokens JWT com expiração curta e refresh token rotacionável.
+- Todas as aprovações e alterações sensíveis registradas em auditoria.
+- Escopo de acesso calculado pela hierarquia da igreja do usuário.
+
+---
+
+# Como executar a infraestrutura local
+
+```bash
+docker compose up -d db
+```
+
+O banco é inicializado com as migrações em `database/migrations`. A especificação inicial da API está em `openapi/cadastroigreja.v1.yaml`.
+
 - JWT Authentication
 - Controle de permissões por cargo
 - Controle de permissões por nível hierárquico
