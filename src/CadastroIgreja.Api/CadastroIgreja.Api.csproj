@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\CadastroIgreja.Application\CadastroIgreja.Application.csproj" />
+    <ProjectReference Include="..\CadastroIgreja.Infrastructure\CadastroIgreja.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>

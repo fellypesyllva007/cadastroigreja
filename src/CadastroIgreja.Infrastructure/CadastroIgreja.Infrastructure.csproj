@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\CadastroIgreja.Application\CadastroIgreja.Application.csproj" />
+    <ProjectReference Include="..\CadastroIgreja.Domain\CadastroIgreja.Domain.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+</Project>
