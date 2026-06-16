@@ -1,19 +1,60 @@
 # Arquitetura do Sistema
 
-Frontend Flutter (Web, Android, iOS, Windows e macOS)
-Backend ASP.NET Core 9
-Banco PostgreSQL
+## Visao Geral
 
-Camadas:
+O sistema sera composto por Flutter, ASP.NET Core 9 e PostgreSQL.
+
+## Frontend
+- Flutter Web
+- Flutter Android
+- Flutter iOS
+- Flutter Windows
+- Flutter macOS
+
+## Backend
+- ASP.NET Core 9
+- REST API
+- JWT Authentication
+- Swagger
+
+## Arquitetura
+
+Clean Architecture:
 - Presentation
 - API
 - Application
 - Domain
 - Infrastructure
 
-Padrões:
-- Clean Architecture
-- CQRS
-- Repository Pattern
-- Dependency Injection
+## CQRS
+
+Commands:
+- RegisterUser
+- ApproveMember
+- ApprovePreacher
+- IssueLetter
+
+Queries:
+- GetUser
+- GetChurch
+- GetLetter
+
+## Estrutura de Projetos
+
+src/
+  CadastroIgreja.Api
+  CadastroIgreja.Application
+  CadastroIgreja.Domain
+  CadastroIgreja.Infrastructure
+
+## Seguranca
 - JWT
+- Refresh Token
+- Auditoria
+- Controle Hierarquico
+
+## Deploy
+- Docker
+- PostgreSQL
+- Nginx
+- HTTPS
