@@ -279,3 +279,23 @@ Projeto privado.
 O projeto possui documentação funcional, contrato inicial de API, Docker Compose para PostgreSQL e migration inicial do banco de dados. Consulte `docs/deployment-checklist.md` antes de publicar em servidor.
 
 Nesta fase, o que pode ser testado no servidor é a criação da base PostgreSQL e validação do modelo de dados. Backend ASP.NET Core e frontend Flutter ainda precisam ser implementados antes de liberar uso por usuários finais.
+## Backend ASP.NET Core 9
+
+A solution inicial do backend foi criada em `CadastroIgreja.sln` seguindo as camadas planejadas:
+
+- `src/CadastroIgreja.Api`: Minimal API com endpoints alinhados ao contrato OpenAPI.
+- `src/CadastroIgreja.Application`: contratos, portas e casos de uso iniciais para autenticação, igrejas e usuários.
+- `src/CadastroIgreja.Domain`: entidades e enums do domínio.
+- `src/CadastroIgreja.Infrastructure`: repositórios em memória e serviços de senha/token para desenvolvimento.
+
+Endpoints implementados neste marco:
+
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `GET /api/churches`
+- `POST /api/churches`
+- `GET /api/users/me`
+- `POST /api/users/{id}/approve`
+
+Os demais endpoints do OpenAPI foram mapeados como stubs autenticados para manter o contrato evolutivo da API.
+
