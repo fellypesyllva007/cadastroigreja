@@ -72,13 +72,53 @@ users.MapGet("/me", async Task<Results<Ok<UserProfileResponse>, NotFound>> (Clai
 users.MapPost("/{id:guid}/approve", async Task<Results<NoContent, NotFound>> (Guid id, UserService service, CancellationToken ct) =>
     await service.ApproveAsync(id, ct) ? TypedResults.NoContent() : TypedResults.NotFound());
 
-app.MapPost("/api/role-requests", () => TypedResults.Created()).RequireAuthorization().WithTags("RoleRequests");
-app.MapPost("/api/role-requests/{id:guid}/approve", (Guid id) => TypedResults.NoContent()).RequireAuthorization().WithTags("RoleRequests");
-app.MapGet("/api/preacher-requests", () => TypedResults.Ok(Array.Empty<object>())).RequireAuthorization().WithTags("PreacherRequests");
-app.MapPost("/api/preacher-requests", () => TypedResults.Created()).RequireAuthorization().WithTags("PreacherRequests");
-app.MapPost("/api/preacher-requests/{id:guid}/approve", (Guid id) => TypedResults.Ok()).RequireAuthorization().WithTags("PreacherRequests");
-app.MapGet("/api/letters", () => TypedResults.Ok(Array.Empty<object>())).RequireAuthorization().WithTags("Letters");
-app.MapGet("/api/letters/{id:guid}/validate", (Guid id) => TypedResults.Ok(new { id, status = "Unknown" })).WithTags("Letters").AllowAnonymous();
+var roleRequests = app.MapGroup("/api/role-requests").WithTags("RoleRequests").RequireAuthorization();
+roleRequests.MapGet("/", async (Guid? userId, RequestStatus? status, RoleChangeRequestService service, CancellationToken ct) =>
+    TypedResults.Ok(await service.ListAsync(userId, status, ct)));
+roleRequests.MapPost("/", async Task<Results<Created, BadRequest<string>>> (CreateRoleChangeRequest request, RoleChangeRequestService service, CancellationToken ct) =>
+{
+    try
+    {
+        var id = await service.CreateAsync(request, ct);
+        return TypedResults.Created($"/api/role-requests/{id}");
+    }
+    catch (InvalidOperationException ex)
+    {
+        return TypedResults.BadRequest(ex.Message);
+    }
+});
+roleRequests.MapPost("/{id:guid}/approve", async Task<Results<NoContent, NotFound>> (Guid id, RoleChangeRequestService service, CancellationToken ct) =>
+    await service.ApproveAsync(id, ct) ? TypedResults.NoContent() : TypedResults.NotFound());
+
+var preacherRequests = app.MapGroup("/api/preacher-requests").WithTags("PreacherRequests").RequireAuthorization();
+preacherRequests.MapGet("/", async (Guid? userId, RequestStatus? status, PreacherRequestService service, CancellationToken ct) =>
+    TypedResults.Ok(await service.ListAsync(userId, status, ct)));
+preacherRequests.MapPost("/", async Task<Results<Created, BadRequest<string>>> (CreatePreacherRequest request, PreacherRequestService service, CancellationToken ct) =>
+{
+    try
+    {
+        var id = await service.CreateAsync(request, ct);
+        return TypedResults.Created($"/api/preacher-requests/{id}");
+    }
+    catch (InvalidOperationException ex)
+    {
+        return TypedResults.BadRequest(ex.Message);
+    }
+});
+preacherRequests.MapPost("/{id:guid}/approve", async Task<Results<Ok<PreacherRequestResponse>, NotFound>> (Guid id, PreacherRequestService service, CancellationToken ct) =>
+{
+    var response = await service.ApproveAsync(id, ct);
+    return response is null ? TypedResults.NotFound() : TypedResults.Ok(response);
+});
+
+var letters = app.MapGroup("/api/letters").WithTags("Letters");
+letters.MapGet("/", async (Guid? userId, PreachingLetterService service, CancellationToken ct) =>
+    TypedResults.Ok(await service.ListAsync(userId, ct))).RequireAuthorization();
+letters.MapGet("/{id:guid}/validate", async Task<Results<Ok<PreachingLetterResponse>, NotFound>> (Guid id, PreachingLetterService service, CancellationToken ct) =>
+{
+    var letter = await service.ValidateAsync(id, ct);
+    return letter is null ? TypedResults.NotFound() : TypedResults.Ok(letter);
+}).AllowAnonymous();
 
 app.Run();
 

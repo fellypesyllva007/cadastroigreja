@@ -8,6 +8,9 @@ public static class DependencyInjection
     public static IServiceCollection AddInfrastructure(this IServiceCollection services) => services
         .AddSingleton<IChurchRepository, InMemoryChurchRepository>()
         .AddSingleton<IUserRepository, InMemoryUserRepository>()
+        .AddSingleton<IRoleChangeRequestRepository, InMemoryRoleChangeRequestRepository>()
+        .AddSingleton<IPreacherRequestRepository, InMemoryPreacherRequestRepository>()
+        .AddSingleton<IPreachingLetterRepository, InMemoryPreachingLetterRepository>()
         .AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>()
         .AddSingleton<ITokenService, DemoTokenService>();
 }
