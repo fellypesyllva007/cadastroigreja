@@ -1,0 +1,12 @@
+{
+  "name": "CadastroIgreja",
+  "short_name": "CadastroIgreja",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#3156A3",
+  "description": "Cliente Flutter para gestão de igrejas, membros e cartas de pregação.",
+  "orientation": "portrait-primary",
+  "prefer_related_applications": false,
+  "icons": []
+}
