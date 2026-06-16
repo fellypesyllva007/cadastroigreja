@@ -69,8 +69,11 @@ users.MapGet("/me", async Task<Results<Ok<UserProfileResponse>, NotFound>> (Clai
     var profile = await service.GetProfileAsync(id, ct);
     return profile is null ? TypedResults.NotFound() : TypedResults.Ok(profile);
 });
-users.MapPost("/{id:guid}/approve", async Task<Results<NoContent, NotFound>> (Guid id, UserService service, CancellationToken ct) =>
-    await service.ApproveAsync(id, ct) ? TypedResults.NoContent() : TypedResults.NotFound());
+users.MapPost("/{id:guid}/approve", async Task<Results<NoContent, NotFound>> (Guid id, ClaimsPrincipal principal, UserService service, CancellationToken ct) =>
+    await service.ApproveAsync(id, CurrentUserId(principal), ct) ? TypedResults.NoContent() : TypedResults.NotFound());
+users.MapPost("/{id:guid}/reject", async Task<Results<NoContent, NotFound>> (Guid id, ClaimsPrincipal principal, UserService service, CancellationToken ct) =>
+    await service.RejectAsync(id, CurrentUserId(principal), ct) ? TypedResults.NoContent() : TypedResults.NotFound());
+
 
 var roleRequests = app.MapGroup("/api/role-requests").WithTags("RoleRequests").RequireAuthorization();
 roleRequests.MapGet("/", async (Guid? userId, RequestStatus? status, RoleChangeRequestService service, CancellationToken ct) =>
@@ -87,8 +90,10 @@ roleRequests.MapPost("/", async Task<Results<Created, BadRequest<string>>> (Crea
         return TypedResults.BadRequest(ex.Message);
     }
 });
-roleRequests.MapPost("/{id:guid}/approve", async Task<Results<NoContent, NotFound>> (Guid id, RoleChangeRequestService service, CancellationToken ct) =>
-    await service.ApproveAsync(id, ct) ? TypedResults.NoContent() : TypedResults.NotFound());
+roleRequests.MapPost("/{id:guid}/approve", async Task<Results<NoContent, NotFound>> (Guid id, ClaimsPrincipal principal, RoleChangeRequestService service, CancellationToken ct) =>
+    await service.ApproveAsync(id, CurrentUserId(principal), ct) ? TypedResults.NoContent() : TypedResults.NotFound());
+roleRequests.MapPost("/{id:guid}/reject", async Task<Results<NoContent, NotFound>> (Guid id, ClaimsPrincipal principal, RoleChangeRequestService service, CancellationToken ct) =>
+    await service.RejectAsync(id, CurrentUserId(principal), ct) ? TypedResults.NoContent() : TypedResults.NotFound());
 
 var preacherRequests = app.MapGroup("/api/preacher-requests").WithTags("PreacherRequests").RequireAuthorization();
 preacherRequests.MapGet("/", async (Guid? userId, RequestStatus? status, PreacherRequestService service, CancellationToken ct) =>
@@ -105,11 +110,13 @@ preacherRequests.MapPost("/", async Task<Results<Created, BadRequest<string>>> (
         return TypedResults.BadRequest(ex.Message);
     }
 });
-preacherRequests.MapPost("/{id:guid}/approve", async Task<Results<Ok<PreacherRequestResponse>, NotFound>> (Guid id, PreacherRequestService service, CancellationToken ct) =>
+preacherRequests.MapPost("/{id:guid}/approve", async Task<Results<Ok<PreacherRequestResponse>, NotFound>> (Guid id, ClaimsPrincipal principal, PreacherRequestService service, CancellationToken ct) =>
 {
-    var response = await service.ApproveAsync(id, ct);
+    var response = await service.ApproveAsync(id, CurrentUserId(principal), ct);
     return response is null ? TypedResults.NotFound() : TypedResults.Ok(response);
 });
+preacherRequests.MapPost("/{id:guid}/reject", async Task<Results<NoContent, NotFound>> (Guid id, ClaimsPrincipal principal, PreacherRequestService service, CancellationToken ct) =>
+    await service.RejectAsync(id, CurrentUserId(principal), ct) ? TypedResults.NoContent() : TypedResults.NotFound());
 
 var letters = app.MapGroup("/api/letters").WithTags("Letters");
 letters.MapGet("/", async (Guid? userId, PreachingLetterService service, CancellationToken ct) =>
@@ -119,8 +126,25 @@ letters.MapGet("/{id:guid}/validate", async Task<Results<Ok<PreachingLetterRespo
     var letter = await service.ValidateAsync(id, ct);
     return letter is null ? TypedResults.NotFound() : TypedResults.Ok(letter);
 }).AllowAnonymous();
+letters.MapPost("/{id:guid}/suspend", async Task<Results<Ok<PreachingLetterResponse>, NotFound>> (Guid id, ClaimsPrincipal principal, PreachingLetterService service, CancellationToken ct) =>
+{
+    var letter = await service.SuspendAsync(id, CurrentUserId(principal), ct);
+    return letter is null ? TypedResults.NotFound() : TypedResults.Ok(letter);
+}).RequireAuthorization();
+letters.MapPost("/{id:guid}/renew", async Task<Results<Ok<PreachingLetterResponse>, NotFound>> (Guid id, ClaimsPrincipal principal, PreachingLetterService service, CancellationToken ct) =>
+{
+    var letter = await service.RenewAsync(id, CurrentUserId(principal), ct);
+    return letter is null ? TypedResults.NotFound() : TypedResults.Ok(letter);
+}).RequireAuthorization();
+
+var auditLogs = app.MapGroup("/api/audit-logs").WithTags("Audit").RequireAuthorization();
+auditLogs.MapGet("/", async (string? entityName, string? entityId, AuditLogService service, CancellationToken ct) =>
+    TypedResults.Ok(await service.ListAsync(entityName, entityId, ct)));
 
 app.Run();
+
+static Guid? CurrentUserId(ClaimsPrincipal? principal) =>
+    Guid.TryParse(principal?.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : null;
 
 internal sealed class DemoBearerHandler(IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder)
     : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)

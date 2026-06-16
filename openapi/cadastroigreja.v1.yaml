@@ -200,3 +200,11 @@ components:
           type: string
         expiresIn:
           type: integer
+
+# Extensões implementadas no MVP de 80%:
+# - POST /api/users/{id}/reject
+# - POST /api/role-requests/{id}/reject
+# - POST /api/preacher-requests/{id}/reject
+# - POST /api/letters/{id}/suspend
+# - POST /api/letters/{id}/renew
+# - GET /api/audit-logs?entityName=&entityId=

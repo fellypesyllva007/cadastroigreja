@@ -69,16 +69,16 @@ class ApiClient {
     return UserProfile.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
-  Future<void> requestRole(String token, {required String userId, required MemberRole requestedRole}) => _post(
+  Future<void> requestRole(String token, {required String userId, required MemberRole requestedRole, String? justification}) => _post(
         '/api/role-requests',
         token: token,
-        body: {'userId': userId, 'requestedRole': requestedRole.apiValue},
+        body: {'userId': userId, 'requestedRole': requestedRole.apiValue, if (justification != null && justification.isNotEmpty) 'justification': justification},
       ).then((_) {});
 
-  Future<void> requestPreacher(String token, {required String userId}) => _post(
+  Future<void> requestPreacher(String token, {required String userId, String? notes}) => _post(
         '/api/preacher-requests',
         token: token,
-        body: {'userId': userId},
+        body: {'userId': userId, if (notes != null && notes.isNotEmpty) 'notes': notes},
       ).then((_) {});
 
   Future<List<RoleChangeRequest>> listRoleRequests(String token, {String? userId, RequestStatus? status}) async {
@@ -99,15 +99,49 @@ class ApiClient {
     return items.cast<Map<String, dynamic>>().map(PreacherRequest.fromJson).toList();
   }
 
+  Future<void> approveUser(String token, String userId) => _post('/api/users/$userId/approve', token: token, body: {}).then((_) {});
+
+  Future<void> rejectUser(String token, String userId) => _post('/api/users/$userId/reject', token: token, body: {}).then((_) {});
+
+  Future<void> approveRoleRequest(String token, String requestId) => _post('/api/role-requests/$requestId/approve', token: token, body: {}).then((_) {});
+
+  Future<void> rejectRoleRequest(String token, String requestId) => _post('/api/role-requests/$requestId/reject', token: token, body: {}).then((_) {});
+
   Future<PreacherRequest> approvePreacherRequest(String token, String requestId) async {
     final response = await _post('/api/preacher-requests/$requestId/approve', token: token, body: {});
     return PreacherRequest.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
+  Future<void> rejectPreacherRequest(String token, String requestId) => _post('/api/preacher-requests/$requestId/reject', token: token, body: {}).then((_) {});
+
   Future<List<PreachingLetter>> listLetters(String token, {String? userId}) async {
     final response = await _get('/api/letters', token: token, query: {if (userId != null) 'userId': userId});
     final items = jsonDecode(response.body) as List<dynamic>;
     return items.cast<Map<String, dynamic>>().map(PreachingLetter.fromJson).toList();
+  }
+
+  Future<PreachingLetter> suspendLetter(String token, String letterId) async {
+    final response = await _post('/api/letters/$letterId/suspend', token: token, body: {});
+    return PreachingLetter.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<PreachingLetter> renewLetter(String token, String letterId) async {
+    final response = await _post('/api/letters/$letterId/renew', token: token, body: {});
+    return PreachingLetter.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<PreachingLetter> validateLetter(String letterId) async {
+    final response = await _get('/api/letters/$letterId/validate');
+    return PreachingLetter.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<List<AuditLogEntry>> listAuditLogs(String token, {String? entityName, String? entityId}) async {
+    final response = await _get('/api/audit-logs', token: token, query: {
+      if (entityName != null) 'entityName': entityName,
+      if (entityId != null) 'entityId': entityId,
+    });
+    final items = jsonDecode(response.body) as List<dynamic>;
+    return items.cast<Map<String, dynamic>>().map(AuditLogEntry.fromJson).toList();
   }
 
   Future<http.Response> _get(String path, {String? token, Map<String, String>? query}) async {
