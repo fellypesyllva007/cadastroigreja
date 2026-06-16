@@ -69,17 +69,45 @@ class ApiClient {
     return UserProfile.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
-  Future<void> requestRole(String token) => _post('/api/role-requests', token: token, body: {}).then((_) {});
-  Future<void> requestPreacher(String token) => _post('/api/preacher-requests', token: token, body: {}).then((_) {});
+  Future<void> requestRole(String token, {required String userId, required MemberRole requestedRole}) => _post(
+        '/api/role-requests',
+        token: token,
+        body: {'userId': userId, 'requestedRole': requestedRole.apiValue},
+      ).then((_) {});
 
-  Future<List<dynamic>> listPreacherRequests(String token) async {
-    final response = await _get('/api/preacher-requests', token: token);
-    return jsonDecode(response.body) as List<dynamic>;
+  Future<void> requestPreacher(String token, {required String userId}) => _post(
+        '/api/preacher-requests',
+        token: token,
+        body: {'userId': userId},
+      ).then((_) {});
+
+  Future<List<RoleChangeRequest>> listRoleRequests(String token, {String? userId, RequestStatus? status}) async {
+    final response = await _get('/api/role-requests', token: token, query: {
+      if (userId != null) 'userId': userId,
+      if (status != null) 'status': status.apiValue,
+    });
+    final items = jsonDecode(response.body) as List<dynamic>;
+    return items.cast<Map<String, dynamic>>().map(RoleChangeRequest.fromJson).toList();
   }
 
-  Future<List<dynamic>> listLetters(String token) async {
-    final response = await _get('/api/letters', token: token);
-    return jsonDecode(response.body) as List<dynamic>;
+  Future<List<PreacherRequest>> listPreacherRequests(String token, {String? userId, RequestStatus? status}) async {
+    final response = await _get('/api/preacher-requests', token: token, query: {
+      if (userId != null) 'userId': userId,
+      if (status != null) 'status': status.apiValue,
+    });
+    final items = jsonDecode(response.body) as List<dynamic>;
+    return items.cast<Map<String, dynamic>>().map(PreacherRequest.fromJson).toList();
+  }
+
+  Future<PreacherRequest> approvePreacherRequest(String token, String requestId) async {
+    final response = await _post('/api/preacher-requests/$requestId/approve', token: token, body: {});
+    return PreacherRequest.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<List<PreachingLetter>> listLetters(String token, {String? userId}) async {
+    final response = await _get('/api/letters', token: token, query: {if (userId != null) 'userId': userId});
+    final items = jsonDecode(response.body) as List<dynamic>;
+    return items.cast<Map<String, dynamic>>().map(PreachingLetter.fromJson).toList();
   }
 
   Future<http.Response> _get(String path, {String? token, Map<String, String>? query}) async {
