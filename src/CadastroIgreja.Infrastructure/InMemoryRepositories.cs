@@ -50,3 +50,47 @@ public sealed class InMemoryUserRepository : IUserRepository
 
     public Task SaveAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 }
+
+public sealed class InMemoryRoleChangeRequestRepository : IRoleChangeRequestRepository
+{
+    private readonly ConcurrentDictionary<Guid, RoleChangeRequest> _requests = new();
+    public Task AddAsync(RoleChangeRequest request, CancellationToken cancellationToken = default) { _requests[request.Id] = request; return Task.CompletedTask; }
+    public Task<RoleChangeRequest?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) => Task.FromResult(_requests.GetValueOrDefault(id));
+    public Task<IReadOnlyCollection<RoleChangeRequest>> ListAsync(Guid? userId, RequestStatus? status, CancellationToken cancellationToken = default)
+    {
+        var query = _requests.Values.AsEnumerable();
+        if (userId.HasValue) query = query.Where(r => r.UserId == userId);
+        if (status.HasValue) query = query.Where(r => r.Status == status);
+        return Task.FromResult<IReadOnlyCollection<RoleChangeRequest>>(query.OrderByDescending(r => r.CreatedAt).ToArray());
+    }
+    public Task SaveAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+}
+
+public sealed class InMemoryPreacherRequestRepository : IPreacherRequestRepository
+{
+    private readonly ConcurrentDictionary<Guid, PreacherRequest> _requests = new();
+    public Task AddAsync(PreacherRequest request, CancellationToken cancellationToken = default) { _requests[request.Id] = request; return Task.CompletedTask; }
+    public Task<PreacherRequest?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) => Task.FromResult(_requests.GetValueOrDefault(id));
+    public Task<IReadOnlyCollection<PreacherRequest>> ListAsync(Guid? userId, RequestStatus? status, CancellationToken cancellationToken = default)
+    {
+        var query = _requests.Values.AsEnumerable();
+        if (userId.HasValue) query = query.Where(r => r.UserId == userId);
+        if (status.HasValue) query = query.Where(r => r.Status == status);
+        return Task.FromResult<IReadOnlyCollection<PreacherRequest>>(query.OrderByDescending(r => r.CreatedAt).ToArray());
+    }
+    public Task SaveAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+}
+
+public sealed class InMemoryPreachingLetterRepository : IPreachingLetterRepository
+{
+    private readonly ConcurrentDictionary<Guid, PreachingLetter> _letters = new();
+    public Task AddAsync(PreachingLetter letter, CancellationToken cancellationToken = default) { _letters[letter.Id] = letter; return Task.CompletedTask; }
+    public Task<PreachingLetter?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) => Task.FromResult(_letters.GetValueOrDefault(id));
+    public Task<IReadOnlyCollection<PreachingLetter>> ListAsync(Guid? userId, CancellationToken cancellationToken = default)
+    {
+        var query = _letters.Values.AsEnumerable();
+        if (userId.HasValue) query = query.Where(l => l.UserId == userId);
+        return Task.FromResult<IReadOnlyCollection<PreachingLetter>>(query.OrderByDescending(l => l.IssuedAt).ToArray());
+    }
+    public Task SaveAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+}
