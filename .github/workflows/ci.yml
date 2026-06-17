@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - develop
+
+jobs:
+  backend:
+    name: Backend build and tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+      - name: Restore backend
+        run: dotnet restore CadastroIgreja.sln
+      - name: Restore backend tests
+        run: dotnet restore tests/CadastroIgreja.Tests/CadastroIgreja.Tests.csproj
+      - name: Build backend
+        run: dotnet build CadastroIgreja.sln --configuration Release --no-restore
+      - name: Run backend tests
+        run: dotnet test tests/CadastroIgreja.Tests/CadastroIgreja.Tests.csproj --configuration Release --logger trx
+
+  database:
+    name: Database migration validation
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: cadastroigreja
+          POSTGRES_USER: cadastroigreja
+          POSTGRES_PASSWORD: cadastroigreja
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cadastroigreja -d cadastroigreja"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Validate SQL migrations
+        env:
+          PGPASSWORD: cadastroigreja
+        run: psql -h localhost -U cadastroigreja -d cadastroigreja -v ON_ERROR_STOP=1 -f database/migrations/001_initial_schema.sql
+
+  flutter:
+    name: Flutter analysis and tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Install dependencies
+        working-directory: flutter_app
+        run: flutter pub get
+      - name: Analyze
+        working-directory: flutter_app
+        run: flutter analyze
+      - name: Test
+        working-directory: flutter_app
+        run: flutter test
