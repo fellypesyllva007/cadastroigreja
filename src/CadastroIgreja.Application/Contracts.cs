@@ -12,8 +12,13 @@ public sealed record UserProfileResponse(Guid Id, string FullName, string Email,
 public sealed record CreateRoleChangeRequest(Guid UserId, MemberRole RequestedRole, string? Justification = null);
 public sealed record RoleChangeRequestResponse(Guid Id, Guid UserId, MemberRole RequestedRole, RequestStatus Status, DateTimeOffset CreatedAt, DateTimeOffset? DecidedAt, string? Justification);
 
-public sealed record CreatePreacherRequest(Guid UserId, string? Notes = null);
+public sealed record CreatePreacherRequest(Guid UserId, string? Notes = null, Guid? DestinationChurchId = null);
 public sealed record PreacherRequestResponse(Guid Id, Guid UserId, Guid ChurchId, RequestStatus Status, PreacherApprovalStep CurrentStep, DateTimeOffset CreatedAt, DateTimeOffset? DecidedAt, Guid? LetterId, string? Notes);
 
 public sealed record PreachingLetterResponse(Guid Id, Guid UserId, Guid ChurchId, Guid PreacherRequestId, string Number, DateOnly IssuedAt, DateOnly ValidUntil, bool Suspended, string ValidationUrl);
 public sealed record AuditLogResponse(long Id, Guid? UserId, string Action, string EntityName, string EntityId, string? Metadata, DateTimeOffset CreatedAt);
+
+public sealed record LeaderSignatureRequest(string FileName, string MimeType, byte[] Content);
+public sealed record LeaderSignatureResponse(Guid Id, Guid LeaderId, string StoragePath, string MimeType, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, bool Active);
+public sealed record PreachingLetterValidationResponse(Guid Id, string LetterNumber, string PreacherName, string IssuingChurch, string DestinationChurch, DateTimeOffset IssuedAt, LetterStatus Status, DateTimeOffset ApprovedAt, string ApprovedByName);
+public sealed record PreachingLetterPdfModel(PreachingLetter Letter, User Preacher, Church OriginChurch, Church? DestinationChurch, User Approver, Church? ApproverChurch, LeaderSignature? Signature, byte[]? SignatureBytes, IReadOnlyList<Church> OriginHierarchy);

@@ -13,4 +13,5 @@ public sealed class User
     public Guid ChurchId { get; set; }
     public MemberRole Role { get; set; } = MemberRole.Membro;
     public UserStatus Status { get; set; } = UserStatus.Pending;
+    public DateOnly? ChurchJoinedAt { get; set; }
 }

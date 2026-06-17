@@ -156,14 +156,14 @@ public sealed class RoleChangeRequestService(IRoleChangeRequestRepository reques
     private static RoleChangeRequestResponse ToResponse(RoleChangeRequest r) => new(r.Id, r.UserId, r.RequestedRole, r.Status, r.CreatedAt, r.DecidedAt, r.Justification);
 }
 
-public sealed class PreacherRequestService(IPreacherRequestRepository requests, IPreachingLetterRepository letters, IUserRepository users, IChurchRepository churches, IAuditLogRepository audit)
+public sealed class PreacherRequestService(IPreacherRequestRepository requests, IPreachingLetterRepository letters, IUserRepository users, IChurchRepository churches, ILeaderSignatureRepository signatures, IFileStorage storage, IPreachingLetterPdfGenerator pdfGenerator, IAuditLogRepository audit)
 {
     public async Task<Guid> CreateAsync(CreatePreacherRequest request, CancellationToken ct = default)
     {
         var user = await users.GetByIdAsync(request.UserId, ct) ?? throw new InvalidOperationException("Usuário não encontrado.");
         if (user.Status != UserStatus.Approved) throw new InvalidOperationException("Usuário precisa estar aprovado.");
         var church = await churches.GetByIdAsync(user.ChurchId, ct) ?? throw new InvalidOperationException("Igreja não encontrada.");
-        var entity = new PreacherRequest { UserId = user.Id, ChurchId = user.ChurchId, CurrentStep = InitialStep(church.Type), Notes = request.Notes?.Trim() };
+        var entity = new PreacherRequest { UserId = user.Id, ChurchId = user.ChurchId, DestinationChurchId = request.DestinationChurchId, CurrentStep = InitialStep(church.Type), Notes = request.Notes?.Trim() };
         await requests.AddAsync(entity, ct);
         await audit.AddAsync(AuditLog.Create(user.Id, "PreacherRequested", nameof(PreacherRequest), entity.Id.ToString(), $"step={entity.CurrentStep}"), ct);
         return entity.Id;
@@ -183,11 +183,35 @@ public sealed class PreacherRequestService(IPreacherRequestRepository requests, 
         }
         else
         {
-            var letter = new PreachingLetter { UserId = request.UserId, ChurchId = request.ChurchId, PreacherRequestId = request.Id, Number = $"CP-{DateTime.UtcNow:yyyyMMdd}-{Random.Shared.Next(1000, 9999)}" };
-            await letters.AddAsync(letter, ct);
+            var approvedAt = DateTimeOffset.UtcNow;
             request.Status = RequestStatus.Approved;
             request.CurrentStep = PreacherApprovalStep.Completed;
-            request.DecidedAt = DateTimeOffset.UtcNow;
+            request.DecidedAt = approvedAt;
+            var validationUrl = $"/api/letters/{{0}}/validate";
+            var letter = new PreachingLetter
+            {
+                UserId = request.UserId,
+                ChurchId = request.ChurchId,
+                DestinationChurchId = request.DestinationChurchId,
+                PreacherRequestId = request.Id,
+                ApprovedByUserId = approverId!.Value,
+                ApprovedAt = approvedAt,
+                LetterNumber = $"CP-{approvedAt:yyyyMMdd}-{Random.Shared.Next(1000, 9999)}",
+                PdfStoragePath = string.Empty,
+                QrCodeValue = validationUrl
+            };
+            letter.QrCodeValue = $"/api/letters/{letter.Id}/validate";
+            var preacher = await users.GetByIdAsync(request.UserId, ct) ?? throw new InvalidOperationException("Pregador não encontrado.");
+            var originChurch = await churches.GetByIdAsync(request.ChurchId, ct) ?? throw new InvalidOperationException("Igreja de origem não encontrada.");
+            var destinationChurch = request.DestinationChurchId is null ? null : await churches.GetByIdAsync(request.DestinationChurchId.Value, ct);
+            var approver = await users.GetByIdAsync(approverId.Value, ct) ?? throw new InvalidOperationException("Aprovador não encontrado.");
+            var approverChurch = await churches.GetByIdAsync(approver.ChurchId, ct);
+            var signature = await signatures.GetActiveByLeaderIdAsync(approver.Id, ct);
+            var signatureBytes = signature is null ? null : await storage.ReadAsync(signature.StoragePath, ct);
+            if (signature is null) await audit.AddAsync(AuditLog.Create(approver.Id, "LeaderSignatureMissing", nameof(LeaderSignature), approver.Id.ToString(), $"preacherRequestId={request.Id}"), ct);
+            var pdf = await pdfGenerator.GenerateAsync(new PreachingLetterPdfModel(letter, preacher, originChurch, destinationChurch, approver, approverChurch, signature, signatureBytes, await LoadHierarchyAsync(originChurch, ct)), ct);
+            letter.PdfStoragePath = await storage.SaveAsync($"storage/letters/{letter.Id}/carta-recomendacao.pdf", pdf, "application/pdf", ct);
+            await letters.AddAsync(letter, ct);
             request.LetterId = letter.Id;
         }
         await requests.SaveAsync(ct);
@@ -207,6 +231,18 @@ public sealed class PreacherRequestService(IPreacherRequestRepository requests, 
         return true;
     }
 
+    private async Task<IReadOnlyList<Church>> LoadHierarchyAsync(Church church, CancellationToken ct)
+    {
+        var result = new List<Church> { church };
+        var current = church;
+        while (current.ParentId is Guid parentId && await churches.GetByIdAsync(parentId, ct) is { } parent)
+        {
+            result.Add(parent);
+            current = parent;
+        }
+        return result;
+    }
+
     private static PreacherApprovalStep InitialStep(ChurchType type) => type switch
     {
         ChurchType.CasaOracao => PreacherApprovalStep.CasaOracao,
@@ -217,15 +253,26 @@ public sealed class PreacherRequestService(IPreacherRequestRepository requests, 
     private static PreacherRequestResponse ToResponse(PreacherRequest r) => new(r.Id, r.UserId, r.ChurchId, r.Status, r.CurrentStep, r.CreatedAt, r.DecidedAt, r.LetterId, r.Notes);
 }
 
-public sealed class PreachingLetterService(IPreachingLetterRepository letters, IAuditLogRepository audit)
+public sealed class PreachingLetterService(IPreachingLetterRepository letters, IUserRepository users, IChurchRepository churches, IFileStorage storage, IAuditLogRepository audit)
 {
     public async Task<IReadOnlyCollection<PreachingLetterResponse>> ListAsync(Guid? userId, CancellationToken ct = default) =>
         (await letters.ListAsync(userId, ct)).Select(ToResponse).ToArray();
 
-    public async Task<PreachingLetterResponse?> ValidateAsync(Guid id, CancellationToken ct = default)
+    public async Task<PreachingLetterValidationResponse?> ValidateAsync(Guid id, CancellationToken ct = default)
     {
         var letter = await letters.GetByIdAsync(id, ct);
-        return letter is null ? null : ToResponse(letter);
+        if (letter is null) return null;
+        var preacher = await users.GetByIdAsync(letter.UserId, ct);
+        var origin = await churches.GetByIdAsync(letter.ChurchId, ct);
+        var destination = letter.DestinationChurchId is null ? origin : await churches.GetByIdAsync(letter.DestinationChurchId.Value, ct);
+        var approver = await users.GetByIdAsync(letter.ApprovedByUserId, ct);
+        return new PreachingLetterValidationResponse(letter.Id, letter.LetterNumber, preacher?.FullName ?? string.Empty, origin?.Name ?? string.Empty, destination?.Name ?? string.Empty, letter.ApprovedAt, letter.Status, letter.ApprovedAt, approver?.FullName ?? string.Empty);
+    }
+
+    public async Task<byte[]?> GetPdfAsync(Guid id, CancellationToken ct = default)
+    {
+        var letter = await letters.GetByIdAsync(id, ct);
+        return letter is null ? null : await storage.ReadAsync(letter.PdfStoragePath, ct);
     }
 
     public async Task<PreachingLetterResponse?> SuspendAsync(Guid id, Guid? actorId = null, CancellationToken ct = default)
@@ -249,11 +296,71 @@ public sealed class PreachingLetterService(IPreachingLetterRepository letters, I
         return ToResponse(letter);
     }
 
-    private static PreachingLetterResponse ToResponse(PreachingLetter l) => new(l.Id, l.UserId, l.ChurchId, l.PreacherRequestId, l.Number, l.IssuedAt, l.ValidUntil, l.Suspended, $"/api/letters/{l.Id}/validate");
+    private static PreachingLetterResponse ToResponse(PreachingLetter l) => new(l.Id, l.UserId, l.ChurchId, l.PreacherRequestId, l.LetterNumber, l.IssuedAt, l.ValidUntil, l.Suspended, l.QrCodeValue);
 }
 
 public sealed class AuditLogService(IAuditLogRepository audit)
 {
     public async Task<IReadOnlyCollection<AuditLogResponse>> ListAsync(string? entityName, string? entityId, CancellationToken ct = default) =>
         (await audit.ListAsync(entityName, entityId, ct)).Select(a => new AuditLogResponse(a.Id, a.UserId, a.Action, a.EntityName, a.EntityId, a.Metadata, a.CreatedAt)).ToArray();
+}
+
+public sealed class LeaderSignatureService(ILeaderSignatureRepository signatures, IFileStorage storage, IAuditLogRepository audit)
+{
+    private static readonly HashSet<string> AllowedMimeTypes = new(StringComparer.OrdinalIgnoreCase) { "image/png", "image/jpeg", "image/jpg" };
+
+    public async Task<LeaderSignatureResponse?> GetAsync(Guid leaderId, CancellationToken ct = default) =>
+        (await signatures.GetActiveByLeaderIdAsync(leaderId, ct)) is { } s ? ToResponse(s) : null;
+
+    public async Task<LeaderSignatureResponse> SaveAsync(Guid leaderId, LeaderSignatureRequest request, CancellationToken ct = default)
+    {
+        if (!AllowedMimeTypes.Contains(request.MimeType)) throw new InvalidOperationException("Formato de assinatura inválido. Use PNG, JPG ou JPEG.");
+        if (request.Content.Length > 5 * 1024 * 1024) throw new InvalidOperationException("Assinatura deve possuir no máximo 5MB.");
+        foreach (var existing in await signatures.ListByLeaderIdAsync(leaderId, ct)) existing.Active = false;
+        var extension = request.MimeType.Equals("image/png", StringComparison.OrdinalIgnoreCase) ? ".png" : ".jpg";
+        var path = await storage.SaveAsync($"storage/signatures/{leaderId}/assinatura-{DateTimeOffset.UtcNow:yyyyMMddHHmmss}{extension}", request.Content, request.MimeType, ct);
+        var signature = new LeaderSignature { LeaderId = leaderId, StoragePath = path, MimeType = request.MimeType, Active = true };
+        await signatures.AddAsync(signature, ct);
+        await signatures.SaveAsync(ct);
+        await audit.AddAsync(AuditLog.Create(leaderId, "LeaderSignatureSaved", nameof(LeaderSignature), signature.Id.ToString(), $"path={path}"), ct);
+        return ToResponse(signature);
+    }
+
+    private static LeaderSignatureResponse ToResponse(LeaderSignature s) => new(s.Id, s.LeaderId, s.StoragePath, s.MimeType, s.CreatedAt, s.UpdatedAt, s.Active);
+}
+
+public sealed class PlainPdfPreachingLetterGenerator : IPreachingLetterPdfGenerator
+{
+    public Task<byte[]> GenerateAsync(PreachingLetterPdfModel model, CancellationToken cancellationToken = default)
+    {
+        var culture = System.Globalization.CultureInfo.GetCultureInfo("pt-BR");
+        var date = model.Letter.ApprovedAt.ToOffset(TimeSpan.Zero).DateTime;
+        var longDate = date.ToString("'Dia' dd 'de' MMMM 'de' yyyy", culture);
+        var city = model.OriginChurch.City ?? model.ApproverChurch?.City ?? "Cidade configurável";
+        var uf = model.OriginChurch.State ?? model.ApproverChurch?.State ?? "UF";
+        var signature = model.SignatureBytes is null ? "________________________________\nDirigente" : "[imagem assinatura digital cadastrada]\n" + model.Approver.FullName + "\nDirigente";
+        var via = $"CARTA DE RECOMENDAÇÃO PARA UM DIA\\n" +
+            $"{model.OriginHierarchy.FirstOrDefault(c => c.Type == ChurchType.Sede)?.Name ?? model.OriginChurch.Name}\\n" +
+            $"Regional: {model.OriginHierarchy.FirstOrDefault(c => c.Type == ChurchType.Regional)?.Name ?? ""}  Setorial: {model.OriginHierarchy.FirstOrDefault(c => c.Type == ChurchType.Setorial)?.Name ?? ""}\\n" +
+            $"Carta nº {model.Letter.LetterNumber}  ID {model.Letter.Id}  Status {model.Letter.Status}\\n" +
+            $"Recomendamos {model.Preacher.FullName}, cargo ministerial {model.Preacher.Role}, membro desde {model.Preacher.ChurchJoinedAt?.ToString("d", culture) ?? "data não informada"}, que congrega em {model.OriginChurch.Name} ({model.OriginChurch.Type}), {model.OriginChurch.City}/{model.OriginChurch.State}.\\n" +
+            $"Para pregar em {model.DestinationChurch?.Name ?? model.OriginChurch.Name}, endereço {model.DestinationChurch?.Address ?? model.OriginChurch.Address ?? "endereço configurável"}, {model.DestinationChurch?.City ?? model.OriginChurch.City}/{model.DestinationChurch?.State ?? model.OriginChurch.State}.\\n" +
+            $"{city}: {city} UF {uf}\\n{longDate}\\n" +
+            $"QR CODE: {model.Letter.QrCodeValue}\\n\\n{signature}\\n" +
+            $"Rodapé: {model.OriginChurch.Address} Telefone {model.OriginChurch.Phone} CNPJ {model.OriginChurch.Cnpj} {model.OriginChurch.InstitutionalInfo}\\n" +
+            "Observações do verso: válida somente para um dia, mediante validação pública do QR Code.";
+        var text = via + "\\n- - - - - - - - - - - - - separação vertical pontilhada - - - - - - - - - - - - -\\n" + via;
+        return Task.FromResult(BuildPdf(text));
+    }
+
+    private static byte[] BuildPdf(string text)
+    {
+        static string Esc(string value) => value.Replace("\\", "\\\\").Replace("(", "\\(").Replace(")", "\\)").Replace("\r", "").Replace("\n", ") Tj T* (");
+        var stream = $"BT /F1 9 Tf 40 800 Td ({Esc(text)}) Tj ET";
+        var objects = new[] { "<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Kids [3 0 R] /Count 1 >>", $"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>", "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>", $"<< /Length {System.Text.Encoding.UTF8.GetByteCount(stream)} >>\nstream\n{stream}\nendstream" };
+        var sb = new System.Text.StringBuilder("%PDF-1.4\n"); var offsets = new List<int> { 0 };
+        for (var i=0;i<objects.Length;i++){ offsets.Add(System.Text.Encoding.UTF8.GetByteCount(sb.ToString())); sb.Append(i+1).Append(" 0 obj\n").Append(objects[i]).Append("\nendobj\n"); }
+        var xref = System.Text.Encoding.UTF8.GetByteCount(sb.ToString()); sb.Append("xref\n0 6\n0000000000 65535 f \n"); foreach(var o in offsets.Skip(1)) sb.Append(o.ToString("0000000000")).Append(" 00000 n \n"); sb.Append("trailer << /Size 6 /Root 1 0 R >>\nstartxref\n").Append(xref).Append("\n%%EOF");
+        return System.Text.Encoding.UTF8.GetBytes(sb.ToString());
+    }
 }
