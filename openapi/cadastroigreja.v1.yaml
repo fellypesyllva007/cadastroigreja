@@ -1,0 +1,210 @@
+openapi: 3.1.0
+info:
+  title: CadastroIgreja API
+  version: 0.1.0
+  description: API REST para cadastro hierárquico de igrejas, membros, cargos, pregadores e cartas.
+servers:
+  - url: https://api.cadastroigreja.local
+security:
+  - bearerAuth: []
+paths:
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      summary: Cadastra um novo membro com status pendente.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterUserRequest'
+      responses:
+        '201':
+          description: Usuário cadastrado para aprovação.
+        '400':
+          description: Dados inválidos.
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Autentica usuário e retorna tokens JWT.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Autenticado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokenResponse'
+        '401':
+          description: Credenciais inválidas.
+  /api/churches:
+    get:
+      tags: [Churches]
+      summary: Lista igrejas conforme escopo hierárquico do usuário autenticado.
+      parameters:
+        - in: query
+          name: parentId
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: type
+          schema:
+            $ref: '#/components/schemas/ChurchType'
+      responses:
+        '200':
+          description: Lista retornada.
+    post:
+      tags: [Churches]
+      summary: Cria uma igreja subordinada ao escopo permitido.
+      responses:
+        '201':
+          description: Igreja criada.
+        '403':
+          description: Sem permissão hierárquica.
+  /api/users/me:
+    get:
+      tags: [Users]
+      summary: Retorna o perfil do usuário autenticado.
+      responses:
+        '200':
+          description: Perfil retornado.
+  /api/users/{id}/approve:
+    post:
+      tags: [Users]
+      summary: Aprova cadastro de membro pendente.
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204':
+          description: Membro aprovado.
+        '403':
+          description: Sem permissão para aprovar este membro.
+  /api/role-requests:
+    post:
+      tags: [RoleRequests]
+      summary: Solicita alteração de cargo.
+      responses:
+        '201':
+          description: Solicitação criada.
+  /api/role-requests/{id}/approve:
+    post:
+      tags: [RoleRequests]
+      summary: Aprova uma alteração de cargo.
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204':
+          description: Solicitação aprovada.
+  /api/preacher-requests:
+    post:
+      tags: [PreacherRequests]
+      summary: Solicita autorização para pregar.
+      responses:
+        '201':
+          description: Solicitação criada.
+    get:
+      tags: [PreacherRequests]
+      summary: Lista solicitações de pregação pendentes no escopo do dirigente.
+      responses:
+        '200':
+          description: Lista retornada.
+  /api/preacher-requests/{id}/approve:
+    post:
+      tags: [PreacherRequests]
+      summary: Registra aprovação no fluxo hierárquico e emite carta quando for aprovação setorial final.
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Aprovação registrada.
+        '403':
+          description: Etapa não permitida ao usuário.
+  /api/letters:
+    get:
+      tags: [Letters]
+      summary: Lista cartas emitidas no escopo permitido.
+      responses:
+        '200':
+          description: Lista retornada.
+  /api/letters/{id}/validate:
+    get:
+      tags: [Letters]
+      summary: Valida carta por ID público ou QR Code.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Carta válida ou status atual retornado.
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    Id:
+      in: path
+      name: id
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    ChurchType:
+      type: string
+      enum: [Sede, Regional, Setorial, CongregacaoLocal, CasaOracao]
+    RegisterUserRequest:
+      type: object
+      required: [fullName, email, password, churchId]
+      properties:
+        fullName:
+          type: string
+          maxLength: 180
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+          maxLength: 32
+        password:
+          type: string
+          minLength: 8
+        churchId:
+          type: string
+          format: uuid
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+    AuthTokenResponse:
+      type: object
+      required: [accessToken, refreshToken, expiresIn]
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        expiresIn:
+          type: integer
+
+# Extensões implementadas no MVP de 80%:
+# - POST /api/users/{id}/reject
+# - POST /api/role-requests/{id}/reject
+# - POST /api/preacher-requests/{id}/reject
+# - POST /api/letters/{id}/suspend
+# - POST /api/letters/{id}/renew
+# - GET /api/audit-logs?entityName=&entityId=

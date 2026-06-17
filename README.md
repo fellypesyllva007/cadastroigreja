@@ -220,6 +220,21 @@ A carta conterá:
 
 # Segurança
 
+- Senhas armazenadas exclusivamente como hash forte.
+- Tokens JWT com expiração curta e refresh token rotacionável.
+- Todas as aprovações e alterações sensíveis registradas em auditoria.
+- Escopo de acesso calculado pela hierarquia da igreja do usuário.
+
+---
+
+# Como executar a infraestrutura local
+
+```bash
+docker compose up -d db
+```
+
+O banco é inicializado com as migrações em `database/migrations`. A especificação inicial da API está em `openapi/cadastroigreja.v1.yaml`.
+
 - JWT Authentication
 - Controle de permissões por cargo
 - Controle de permissões por nível hierárquico
@@ -257,3 +272,31 @@ A carta conterá:
 # Licença
 
 Projeto privado.
+
+---
+
+# Estado atual do projeto
+
+O projeto possui documentação funcional, contrato inicial de API, Docker Compose para PostgreSQL e migration inicial do banco de dados. Consulte `docs/deployment-checklist.md` antes de publicar em servidor.
+
+Nesta fase, o MVP executável já possui backend ASP.NET Core, cliente Flutter, contrato OpenAPI, migration PostgreSQL e pipeline de CI; antes de liberar uso por usuários finais, faltam apenas as integrações produtivas de JWT assinado, persistência PostgreSQL em runtime, geração real de PDF/QR Code e configuração de ambiente.
+## Backend ASP.NET Core 9
+
+A solution inicial do backend foi criada em `CadastroIgreja.sln` seguindo as camadas planejadas:
+
+- `src/CadastroIgreja.Api`: Minimal API com endpoints alinhados ao contrato OpenAPI.
+- `src/CadastroIgreja.Application`: contratos, portas e casos de uso iniciais para autenticação, igrejas e usuários.
+- `src/CadastroIgreja.Domain`: entidades e enums do domínio.
+- `src/CadastroIgreja.Infrastructure`: repositórios em memória e serviços de senha/token para desenvolvimento.
+
+Endpoints implementados neste marco:
+
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `GET /api/churches`
+- `POST /api/churches`
+- `GET /api/users/me`
+- `POST /api/users/{id}/approve`
+
+Os demais endpoints do OpenAPI foram mapeados como stubs autenticados para manter o contrato evolutivo da API.
+
