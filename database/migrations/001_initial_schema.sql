@@ -17,6 +17,12 @@ CREATE TABLE churches (
     type varchar(32) NOT NULL CHECK (type IN ('Sede', 'Regional', 'Setorial', 'CongregacaoLocal', 'CasaOracao')),
     parent_id uuid NULL REFERENCES churches(id) ON DELETE RESTRICT,
     active boolean NOT NULL DEFAULT true,
+    address text NULL,
+    city varchar(120) NULL,
+    state varchar(2) NULL,
+    phone varchar(32) NULL,
+    cnpj varchar(32) NULL,
+    institutional_info text NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT ck_church_parent_by_type CHECK (
@@ -75,6 +81,11 @@ CREATE TRIGGER trg_churches_updated_at
 BEFORE UPDATE ON churches
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
+INSERT INTO churches (id, name, type)
+VALUES ('11111111-1111-1111-1111-111111111111', 'Sede', 'Sede')
+ON CONFLICT (id) DO NOTHING;
+
+
 CREATE TABLE roles (
     id smallserial PRIMARY KEY,
     name varchar(32) NOT NULL UNIQUE CHECK (name IN ('Membro', 'Diacono', 'Presbitero', 'Pastor', 'Dirigente')),
@@ -97,7 +108,8 @@ CREATE TABLE users (
     password_hash text NOT NULL,
     church_id uuid NOT NULL REFERENCES churches(id) ON DELETE RESTRICT,
     role_id smallint NOT NULL REFERENCES roles(id) ON DELETE RESTRICT,
-    status varchar(24) NOT NULL DEFAULT 'Pending' CHECK (status IN ('Pending', 'Active', 'Suspended', 'Rejected')),
+    status varchar(24) NOT NULL DEFAULT 'Pending' CHECK (status IN ('Pending', 'Approved', 'Suspended', 'Rejected')),
+    church_joined_at date NULL,
     is_system_admin boolean NOT NULL DEFAULT false,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now()
@@ -131,7 +143,7 @@ CREATE TABLE role_change_requests (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     requested_role_id smallint NOT NULL REFERENCES roles(id) ON DELETE RESTRICT,
-    status varchar(24) NOT NULL DEFAULT 'Pending' CHECK (status IN ('Pending', 'Approved', 'Rejected', 'Canceled')),
+    status varchar(24) NOT NULL DEFAULT 'Pending' CHECK (status IN ('Pending', 'Approved', 'Rejected')),
     justification text NULL,
     decided_by uuid NULL REFERENCES users(id) ON DELETE SET NULL,
     decided_at timestamptz NULL,
@@ -141,12 +153,14 @@ CREATE TABLE role_change_requests (
 CREATE TABLE preacher_requests (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    status varchar(32) NOT NULL DEFAULT 'Pending' CHECK (status IN ('Pending', 'HouseApproved', 'LocalApproved', 'SetorialApproved', 'Rejected', 'Canceled')),
+    status varchar(32) NOT NULL DEFAULT 'Pending' CHECK (status IN ('Pending', 'Approved', 'Rejected')),
+    current_step varchar(32) NOT NULL DEFAULT 'Setorial' CHECK (current_step IN ('CasaOracao', 'CongregacaoLocal', 'Setorial', 'Completed')),
     origin_church_id uuid NOT NULL REFERENCES churches(id) ON DELETE RESTRICT,
-    requested_at timestamptz NOT NULL DEFAULT now(),
-    finalized_at timestamptz NULL,
-    valid_until date NULL,
-    rejection_reason text NULL
+    destination_church_id uuid NULL REFERENCES churches(id) ON DELETE RESTRICT,
+    notes text NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    decided_at timestamptz NULL,
+    letter_id uuid NULL
 );
 
 CREATE TABLE approvals (
@@ -181,7 +195,10 @@ CREATE TABLE preaching_letters (
     number varchar(40) NOT NULL UNIQUE,
     issue_date date NOT NULL DEFAULT current_date,
     expiration_date date NOT NULL,
-    status varchar(16) NOT NULL DEFAULT 'Active' CHECK (status IN ('Active', 'Suspended', 'Expired', 'Canceled')),
+    church_id uuid NOT NULL REFERENCES churches(id) ON DELETE RESTRICT,
+    destination_church_id uuid NULL REFERENCES churches(id) ON DELETE RESTRICT,
+    status varchar(16) NOT NULL DEFAULT 'Active' CHECK (status IN ('Active', 'Suspended', 'Expired', 'Cancelled')),
+    approved_at timestamptz NOT NULL DEFAULT now(),
     pdf_file_id uuid NULL REFERENCES storage_files(id) ON DELETE SET NULL,
     pdf_path text NOT NULL,
     qr_code_payload text NOT NULL,
@@ -189,6 +206,20 @@ CREATE TABLE preaching_letters (
     created_at timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT ck_preaching_letters_expiration_after_issue CHECK (expiration_date > issue_date)
 );
+
+CREATE TABLE leader_signatures (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    leader_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    storage_path text NOT NULL,
+    mime_type varchar(120) NOT NULL,
+    active boolean NOT NULL DEFAULT true,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TRIGGER trg_leader_signatures_updated_at
+BEFORE UPDATE ON leader_signatures
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TABLE audit_logs (
     id bigserial PRIMARY KEY,
@@ -213,5 +244,6 @@ CREATE INDEX ix_preacher_requests_user_id ON preacher_requests(user_id);
 CREATE INDEX ix_preacher_requests_origin_church_id ON preacher_requests(origin_church_id);
 CREATE INDEX ix_approvals_request ON approvals(request_type, request_id);
 CREATE INDEX ix_storage_files_entity ON storage_files(entity_name, entity_id);
+CREATE INDEX ix_leader_signatures_leader_id ON leader_signatures(leader_id);
 CREATE INDEX ix_audit_logs_entity ON audit_logs(entity_name, entity_id);
 CREATE INDEX ix_audit_logs_created_at ON audit_logs(created_at);

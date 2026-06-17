@@ -162,6 +162,21 @@ components:
     ChurchType:
       type: string
       enum: [Sede, Regional, Setorial, CongregacaoLocal, CasaOracao]
+    MemberRole:
+      type: string
+      enum: [Membro, Diacono, Presbitero, Pastor, Dirigente]
+    UserStatus:
+      type: string
+      enum: [Pending, Approved, Rejected, Suspended]
+    RequestStatus:
+      type: string
+      enum: [Pending, Approved, Rejected]
+    PreacherApprovalStep:
+      type: string
+      enum: [CasaOracao, CongregacaoLocal, Setorial, Completed]
+    LetterStatus:
+      type: string
+      enum: [Active, Suspended, Expired, Cancelled]
     RegisterUserRequest:
       type: object
       required: [fullName, email, password, churchId]
