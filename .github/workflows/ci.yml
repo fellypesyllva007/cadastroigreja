@@ -65,11 +65,11 @@ jobs:
         with:
           channel: stable
       - name: Install dependencies
-        working-directory: flutter_app
+        working-directory: frontend
         run: flutter pub get
       - name: Analyze
-        working-directory: flutter_app
+        working-directory: frontend
         run: flutter analyze
       - name: Test
-        working-directory: flutter_app
+        working-directory: frontend
         run: flutter test
