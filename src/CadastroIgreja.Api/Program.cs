@@ -173,8 +173,8 @@ leaderSignatures.MapPut("/", async Task<Results<Ok<LeaderSignatureResponse>, Bad
 });
 
 var auditLogs = app.MapGroup("/api/audit-logs").WithTags("Audit").RequireAuthorization();
-auditLogs.MapGet("/", async (string? entityName, string? entityId, AuditLogService service, CancellationToken ct) =>
-    TypedResults.Ok(await service.ListAsync(entityName, entityId, ct)));
+auditLogs.MapGet("/", async (string? entityName, string? entityId, ClaimsPrincipal principal, AuditLogService service, CancellationToken ct) =>
+    TypedResults.Ok(await service.ListAuthorizedAsync(CurrentUserId(principal), entityName, entityId, ct)));
 
 app.Run();
 

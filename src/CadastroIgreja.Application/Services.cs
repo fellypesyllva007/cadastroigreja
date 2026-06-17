@@ -67,20 +67,67 @@ public sealed class ChurchService(IChurchRepository churches, IAuditLogRepositor
 }
 
 
-internal static class MinisterialAuthorization
+public sealed class HierarchicalAuthorizationService(IUserRepository users, IChurchRepository churches) : IHierarchicalAuthorizationService
 {
-    public static async Task EnsureApproverAsync(IUserRepository users, Guid? approverId, CancellationToken ct)
+    public async Task<bool> CanApproveUserAsync(Guid? approverId, User targetUser, CancellationToken cancellationToken = default) =>
+        await HasMinisterialScopeAsync(approverId, targetUser.ChurchId, cancellationToken);
+
+    public async Task<bool> CanApproveRoleChangeAsync(Guid? approverId, User targetUser, MemberRole requestedRole, CancellationToken cancellationToken = default)
     {
-        if (approverId is null) throw new UnauthorizedAccessException("Aprovador autenticado é obrigatório.");
-        var approver = await users.GetByIdAsync(approverId.Value, ct);
-        if (approver is null || approver.Status != UserStatus.Approved || (approver.Role != MemberRole.Dirigente && approver.Role != MemberRole.Pastor))
+        var approver = await GetActiveMinisterAsync(approverId, cancellationToken);
+        if (approver is null || !await IsChurchInScopeAsync(approver.ChurchId, targetUser.ChurchId, cancellationToken)) return false;
+        if (requestedRole == MemberRole.Pastor || requestedRole == MemberRole.Dirigente) return approver.Role == MemberRole.Dirigente;
+        return true;
+    }
+
+    public async Task<bool> CanApprovePreacherStepAsync(Guid? approverId, PreacherRequest request, CancellationToken cancellationToken = default) =>
+        await HasMinisterialScopeAsync(approverId, request.ChurchId, cancellationToken);
+
+    public async Task<bool> CanIssueLetterAsync(Guid? approverId, PreacherRequest request, CancellationToken cancellationToken = default) =>
+        await HasMinisterialScopeAsync(approverId, request.ChurchId, cancellationToken);
+
+    public async Task<bool> CanSuspendLetterAsync(Guid? actorId, PreachingLetter letter, CancellationToken cancellationToken = default) =>
+        await HasMinisterialScopeAsync(actorId, letter.ChurchId, cancellationToken);
+
+    public async Task<bool> CanViewAuditLogsAsync(Guid? actorId, CancellationToken cancellationToken = default) =>
+        await GetActiveMinisterAsync(actorId, cancellationToken) is { Role: MemberRole.Dirigente };
+
+    private async Task<bool> HasMinisterialScopeAsync(Guid? actorId, Guid targetChurchId, CancellationToken ct)
+    {
+        var actor = await GetActiveMinisterAsync(actorId, ct);
+        return actor is not null && await IsChurchInScopeAsync(actor.ChurchId, targetChurchId, ct);
+    }
+
+    private async Task<User?> GetActiveMinisterAsync(Guid? actorId, CancellationToken ct)
+    {
+        if (actorId is null) return null;
+        var actor = await users.GetByIdAsync(actorId.Value, ct);
+        return actor is { Status: UserStatus.Approved } && (actor.Role == MemberRole.Dirigente || actor.Role == MemberRole.Pastor) ? actor : null;
+    }
+
+    private async Task<bool> IsChurchInScopeAsync(Guid actorChurchId, Guid targetChurchId, CancellationToken ct)
+    {
+        var currentId = targetChurchId;
+        while (true)
         {
-            throw new UnauthorizedAccessException("Aprovador sem permissão ministerial para esta ação.");
+            if (currentId == actorChurchId) return true;
+            var current = await churches.GetByIdAsync(currentId, ct);
+            if (current?.ParentId is not Guid parentId) return false;
+            currentId = parentId;
         }
     }
 }
 
-public sealed class UserService(IUserRepository users, IAuditLogRepository audit)
+internal static class AuthorizationGuards
+{
+    public static void Ensure(bool allowed, string message = "Usuário sem permissão hierárquica para esta ação.")
+    {
+        if (!allowed) throw new UnauthorizedAccessException(message);
+    }
+}
+
+
+public sealed class UserService(IUserRepository users, IHierarchicalAuthorizationService authorization, IAuditLogRepository audit)
 {
     public async Task<UserProfileResponse?> GetProfileAsync(Guid id, CancellationToken ct = default)
     {
@@ -90,9 +137,9 @@ public sealed class UserService(IUserRepository users, IAuditLogRepository audit
 
     public async Task<bool> ApproveAsync(Guid id, Guid? approverId = null, CancellationToken ct = default)
     {
-        await MinisterialAuthorization.EnsureApproverAsync(users, approverId, ct);
         var user = await users.GetByIdAsync(id, ct);
         if (user is null) return false;
+        AuthorizationGuards.Ensure(await authorization.CanApproveUserAsync(approverId, user, ct));
         user.Status = UserStatus.Approved;
         await users.SaveAsync(ct);
         await audit.AddAsync(AuditLog.Create(approverId, "UserApproved", nameof(User), id.ToString()), ct);
@@ -101,9 +148,9 @@ public sealed class UserService(IUserRepository users, IAuditLogRepository audit
 
     public async Task<bool> RejectAsync(Guid id, Guid? approverId = null, CancellationToken ct = default)
     {
-        await MinisterialAuthorization.EnsureApproverAsync(users, approverId, ct);
         var user = await users.GetByIdAsync(id, ct);
         if (user is null) return false;
+        AuthorizationGuards.Ensure(await authorization.CanApproveUserAsync(approverId, user, ct));
         user.Status = UserStatus.Rejected;
         await users.SaveAsync(ct);
         await audit.AddAsync(AuditLog.Create(approverId, "UserRejected", nameof(User), id.ToString()), ct);
@@ -111,7 +158,7 @@ public sealed class UserService(IUserRepository users, IAuditLogRepository audit
     }
 }
 
-public sealed class RoleChangeRequestService(IRoleChangeRequestRepository requests, IUserRepository users, IAuditLogRepository audit)
+public sealed class RoleChangeRequestService(IRoleChangeRequestRepository requests, IUserRepository users, IHierarchicalAuthorizationService authorization, IAuditLogRepository audit)
 {
     public async Task<Guid> CreateAsync(CreateRoleChangeRequest request, CancellationToken ct = default)
     {
@@ -127,11 +174,11 @@ public sealed class RoleChangeRequestService(IRoleChangeRequestRepository reques
 
     public async Task<bool> ApproveAsync(Guid id, Guid? approverId = null, CancellationToken ct = default)
     {
-        await MinisterialAuthorization.EnsureApproverAsync(users, approverId, ct);
         var request = await requests.GetByIdAsync(id, ct);
         if (request is null || request.Status != RequestStatus.Pending) return false;
         var user = await users.GetByIdAsync(request.UserId, ct);
         if (user is null) return false;
+        AuthorizationGuards.Ensure(await authorization.CanApproveRoleChangeAsync(approverId, user, request.RequestedRole, ct));
         user.Role = request.RequestedRole;
         request.Status = RequestStatus.Approved;
         request.DecidedAt = DateTimeOffset.UtcNow;
@@ -143,9 +190,11 @@ public sealed class RoleChangeRequestService(IRoleChangeRequestRepository reques
 
     public async Task<bool> RejectAsync(Guid id, Guid? approverId = null, CancellationToken ct = default)
     {
-        await MinisterialAuthorization.EnsureApproverAsync(users, approverId, ct);
         var request = await requests.GetByIdAsync(id, ct);
         if (request is null || request.Status != RequestStatus.Pending) return false;
+        var targetUser = await users.GetByIdAsync(request.UserId, ct);
+        if (targetUser is null) return false;
+        AuthorizationGuards.Ensure(await authorization.CanApproveRoleChangeAsync(approverId, targetUser, request.RequestedRole, ct));
         request.Status = RequestStatus.Rejected;
         request.DecidedAt = DateTimeOffset.UtcNow;
         await requests.SaveAsync(ct);
@@ -156,7 +205,7 @@ public sealed class RoleChangeRequestService(IRoleChangeRequestRepository reques
     private static RoleChangeRequestResponse ToResponse(RoleChangeRequest r) => new(r.Id, r.UserId, r.RequestedRole, r.Status, r.CreatedAt, r.DecidedAt, r.Justification);
 }
 
-public sealed class PreacherRequestService(IPreacherRequestRepository requests, IPreachingLetterRepository letters, IUserRepository users, IChurchRepository churches, ILeaderSignatureRepository signatures, IFileStorage storage, IPreachingLetterPdfGenerator pdfGenerator, IAuditLogRepository audit)
+public sealed class PreacherRequestService(IPreacherRequestRepository requests, IPreachingLetterRepository letters, IUserRepository users, IChurchRepository churches, IHierarchicalAuthorizationService authorization, ILeaderSignatureRepository signatures, IFileStorage storage, IPreachingLetterPdfGenerator pdfGenerator, IAuditLogRepository audit)
 {
     public async Task<Guid> CreateAsync(CreatePreacherRequest request, CancellationToken ct = default)
     {
@@ -174,15 +223,16 @@ public sealed class PreacherRequestService(IPreacherRequestRepository requests, 
 
     public async Task<PreacherRequestResponse?> ApproveAsync(Guid id, Guid? approverId = null, CancellationToken ct = default)
     {
-        await MinisterialAuthorization.EnsureApproverAsync(users, approverId, ct);
         var request = await requests.GetByIdAsync(id, ct);
         if (request is null || request.Status != RequestStatus.Pending) return null;
+        AuthorizationGuards.Ensure(await authorization.CanApprovePreacherStepAsync(approverId, request, ct));
         if (request.CurrentStep != PreacherApprovalStep.Setorial)
         {
             request.CurrentStep = request.CurrentStep == PreacherApprovalStep.CasaOracao ? PreacherApprovalStep.CongregacaoLocal : PreacherApprovalStep.Setorial;
         }
         else
         {
+            AuthorizationGuards.Ensure(await authorization.CanIssueLetterAsync(approverId, request, ct));
             var approvedAt = DateTimeOffset.UtcNow;
             request.Status = RequestStatus.Approved;
             request.CurrentStep = PreacherApprovalStep.Completed;
@@ -221,9 +271,9 @@ public sealed class PreacherRequestService(IPreacherRequestRepository requests, 
 
     public async Task<bool> RejectAsync(Guid id, Guid? approverId = null, CancellationToken ct = default)
     {
-        await MinisterialAuthorization.EnsureApproverAsync(users, approverId, ct);
         var request = await requests.GetByIdAsync(id, ct);
         if (request is null || request.Status != RequestStatus.Pending) return false;
+        AuthorizationGuards.Ensure(await authorization.CanApprovePreacherStepAsync(approverId, request, ct));
         request.Status = RequestStatus.Rejected;
         request.DecidedAt = DateTimeOffset.UtcNow;
         await requests.SaveAsync(ct);
@@ -253,7 +303,7 @@ public sealed class PreacherRequestService(IPreacherRequestRepository requests, 
     private static PreacherRequestResponse ToResponse(PreacherRequest r) => new(r.Id, r.UserId, r.ChurchId, r.Status, r.CurrentStep, r.CreatedAt, r.DecidedAt, r.LetterId, r.Notes);
 }
 
-public sealed class PreachingLetterService(IPreachingLetterRepository letters, IUserRepository users, IChurchRepository churches, IFileStorage storage, IAuditLogRepository audit)
+public sealed class PreachingLetterService(IPreachingLetterRepository letters, IUserRepository users, IChurchRepository churches, IHierarchicalAuthorizationService authorization, IFileStorage storage, IAuditLogRepository audit)
 {
     public async Task<IReadOnlyCollection<PreachingLetterResponse>> ListAsync(Guid? userId, CancellationToken ct = default) =>
         (await letters.ListAsync(userId, ct)).Select(ToResponse).ToArray();
@@ -279,6 +329,7 @@ public sealed class PreachingLetterService(IPreachingLetterRepository letters, I
     {
         var letter = await letters.GetByIdAsync(id, ct);
         if (letter is null) return null;
+        AuthorizationGuards.Ensure(await authorization.CanSuspendLetterAsync(actorId, letter, ct));
         letter.Suspended = true;
         await letters.SaveAsync(ct);
         await audit.AddAsync(AuditLog.Create(actorId, "LetterSuspended", nameof(PreachingLetter), id.ToString()), ct);
@@ -289,6 +340,7 @@ public sealed class PreachingLetterService(IPreachingLetterRepository letters, I
     {
         var letter = await letters.GetByIdAsync(id, ct);
         if (letter is null) return null;
+        AuthorizationGuards.Ensure(await authorization.CanSuspendLetterAsync(actorId, letter, ct));
         letter.ValidUntil = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(1));
         letter.Suspended = false;
         await letters.SaveAsync(ct);
@@ -299,10 +351,16 @@ public sealed class PreachingLetterService(IPreachingLetterRepository letters, I
     private static PreachingLetterResponse ToResponse(PreachingLetter l) => new(l.Id, l.UserId, l.ChurchId, l.PreacherRequestId, l.LetterNumber, l.IssuedAt, l.ValidUntil, l.Suspended, l.QrCodeValue);
 }
 
-public sealed class AuditLogService(IAuditLogRepository audit)
+public sealed class AuditLogService(IAuditLogRepository audit, IHierarchicalAuthorizationService authorization)
 {
     public async Task<IReadOnlyCollection<AuditLogResponse>> ListAsync(string? entityName, string? entityId, CancellationToken ct = default) =>
         (await audit.ListAsync(entityName, entityId, ct)).Select(a => new AuditLogResponse(a.Id, a.UserId, a.Action, a.EntityName, a.EntityId, a.Metadata, a.CreatedAt)).ToArray();
+
+    public async Task<IReadOnlyCollection<AuditLogResponse>> ListAuthorizedAsync(Guid? actorId, string? entityName, string? entityId, CancellationToken ct = default)
+    {
+        AuthorizationGuards.Ensure(await authorization.CanViewAuditLogsAsync(actorId, ct));
+        return await ListAsync(entityName, entityId, ct);
+    }
 }
 
 public sealed class LeaderSignatureService(ILeaderSignatureRepository signatures, IFileStorage storage, IAuditLogRepository audit)
