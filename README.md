@@ -278,7 +278,7 @@ Projeto privado.
 
 O projeto possui documentação funcional, contrato inicial de API, Docker Compose para PostgreSQL e migration inicial do banco de dados. Consulte `docs/deployment-checklist.md` antes de publicar em servidor.
 
-Nesta fase, o que pode ser testado no servidor é a criação da base PostgreSQL e validação do modelo de dados. Backend ASP.NET Core e frontend Flutter ainda precisam ser implementados antes de liberar uso por usuários finais.
+Nesta fase, o MVP executável já possui backend ASP.NET Core, cliente Flutter, contrato OpenAPI, migration PostgreSQL e pipeline de CI; antes de liberar uso por usuários finais, faltam apenas as integrações produtivas de JWT assinado, persistência PostgreSQL em runtime, geração real de PDF/QR Code e configuração de ambiente.
 ## Backend ASP.NET Core 9
 
 A solution inicial do backend foi criada em `CadastroIgreja.sln` seguindo as camadas planejadas:
