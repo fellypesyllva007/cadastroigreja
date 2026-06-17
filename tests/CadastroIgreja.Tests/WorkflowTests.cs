@@ -60,7 +60,7 @@ public sealed class WorkflowTests
         await users.AddAsync(user);
         await users.AddAsync(approver);
 
-        var service = new PreacherRequestService(preacherRequests, letters, users, churches, new InMemoryLeaderSignatureRepository(), new LocalFileStorage(), new PlainPdfPreachingLetterGenerator(), audit);
+        var service = new PreacherRequestService(preacherRequests, letters, users, churches, new HierarchicalAuthorizationService(users, churches), new InMemoryLeaderSignatureRepository(), new LocalFileStorage(), new PlainPdfPreachingLetterGenerator(), audit);
         var requestId = await service.CreateAsync(new CreatePreacherRequest(user.Id, "Chamado validado"));
 
         var first = await service.ApproveAsync(requestId, approver.Id);
@@ -81,12 +81,14 @@ public sealed class WorkflowTests
         var users = new InMemoryUserRepository();
         var requests = new InMemoryRoleChangeRequestRepository();
         var audit = new InMemoryAuditLogRepository();
-        var user = new User { FullName = "Ana", Email = "ana@example.com", PasswordHash = "hash", ChurchId = Guid.NewGuid(), Status = UserStatus.Approved };
+        var churches = new InMemoryChurchRepository();
+        var churchId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var user = new User { FullName = "Ana", Email = "ana@example.com", PasswordHash = "hash", ChurchId = churchId, Status = UserStatus.Approved };
         var approver = new User { FullName = "Dirigente", Email = "dirigente@example.com", PasswordHash = "hash", ChurchId = user.ChurchId, Status = UserStatus.Approved, Role = MemberRole.Dirigente };
         await users.AddAsync(user);
         await users.AddAsync(approver);
 
-        var service = new RoleChangeRequestService(requests, users, audit);
+        var service = new RoleChangeRequestService(requests, users, new HierarchicalAuthorizationService(users, churches), audit);
         var requestId = await service.CreateAsync(new CreateRoleChangeRequest(user.Id, MemberRole.Diacono, "Serviço local"));
         var approved = await service.ApproveAsync(requestId, approver.Id);
 
@@ -100,12 +102,14 @@ public sealed class WorkflowTests
         var users = new InMemoryUserRepository();
         var requests = new InMemoryRoleChangeRequestRepository();
         var audit = new InMemoryAuditLogRepository();
-        var user = new User { FullName = "Bruno", Email = "bruno@example.com", PasswordHash = "hash", ChurchId = Guid.NewGuid(), Status = UserStatus.Approved };
+        var churches = new InMemoryChurchRepository();
+        var churchId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var user = new User { FullName = "Bruno", Email = "bruno@example.com", PasswordHash = "hash", ChurchId = churchId, Status = UserStatus.Approved };
         var memberApprover = new User { FullName = "Membro", Email = "membro@example.com", PasswordHash = "hash", ChurchId = user.ChurchId, Status = UserStatus.Approved, Role = MemberRole.Membro };
         await users.AddAsync(user);
         await users.AddAsync(memberApprover);
 
-        var service = new RoleChangeRequestService(requests, users, audit);
+        var service = new RoleChangeRequestService(requests, users, new HierarchicalAuthorizationService(users, churches), audit);
         var requestId = await service.CreateAsync(new CreateRoleChangeRequest(user.Id, MemberRole.Presbitero, "Teste negativo"));
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.ApproveAsync(requestId, memberApprover.Id));
@@ -127,7 +131,7 @@ public sealed class WorkflowTests
         var approver = new User { FullName = "Dirigente Dinâmico", Email = "dirigente2@example.com", PasswordHash = "hash", ChurchId = churchId, Status = UserStatus.Approved, Role = MemberRole.Dirigente };
         await users.AddAsync(preacher);
         await users.AddAsync(approver);
-        var service = new PreacherRequestService(preacherRequests, letters, users, churches, signatures, storage, new PlainPdfPreachingLetterGenerator(), audit);
+        var service = new PreacherRequestService(preacherRequests, letters, users, churches, new HierarchicalAuthorizationService(users, churches), signatures, storage, new PlainPdfPreachingLetterGenerator(), audit);
 
         var requestId = await service.CreateAsync(new CreatePreacherRequest(preacher.Id));
         var approved = await service.ApproveAsync(requestId, approver.Id);
@@ -153,6 +157,48 @@ public sealed class WorkflowTests
         Assert.True(active.Active);
         Assert.Single((await repo.ListByLeaderIdAsync(leaderId)).Where(s => s.Active));
         await Assert.ThrowsAsync<InvalidOperationException>(() => service.SaveAsync(leaderId, new LeaderSignatureRequest("assinatura.gif", "image/gif", new byte[] { 1 })));
+    }
+
+    [Fact]
+    public async Task Dirigente_required_to_approve_pastor_or_dirigente_role_change()
+    {
+        var users = new InMemoryUserRepository();
+        var requests = new InMemoryRoleChangeRequestRepository();
+        var audit = new InMemoryAuditLogRepository();
+        var churches = new InMemoryChurchRepository();
+        var churchId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var user = new User { FullName = "Carlos", Email = "carlos@example.com", PasswordHash = "hash", ChurchId = churchId, Status = UserStatus.Approved };
+        var pastor = new User { FullName = "Pastor", Email = "pastor-neg@example.com", PasswordHash = "hash", ChurchId = churchId, Status = UserStatus.Approved, Role = MemberRole.Pastor };
+        var dirigente = new User { FullName = "Dirigente", Email = "dirigente-ok@example.com", PasswordHash = "hash", ChurchId = churchId, Status = UserStatus.Approved, Role = MemberRole.Dirigente };
+        await users.AddAsync(user);
+        await users.AddAsync(pastor);
+        await users.AddAsync(dirigente);
+        var service = new RoleChangeRequestService(requests, users, new HierarchicalAuthorizationService(users, churches), audit);
+        var requestId = await service.CreateAsync(new CreateRoleChangeRequest(user.Id, MemberRole.Pastor, "Consagração"));
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.ApproveAsync(requestId, pastor.Id));
+        Assert.True(await service.ApproveAsync(requestId, dirigente.Id));
+        Assert.Equal(MemberRole.Pastor, (await users.GetByIdAsync(user.Id))!.Role);
+    }
+
+    [Fact]
+    public async Task Letter_suspend_rejects_actor_outside_church_hierarchy()
+    {
+        var churches = new InMemoryChurchRepository();
+        var users = new InMemoryUserRepository();
+        var letters = new InMemoryPreachingLetterRepository();
+        var audit = new InMemoryAuditLogRepository();
+        var churchId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var otherChurchId = Guid.NewGuid();
+        await churches.AddAsync(new Church { Id = otherChurchId, Name = "Outra sede", Type = ChurchType.Sede });
+        var actor = new User { FullName = "Dirigente Externo", Email = "externo@example.com", PasswordHash = "hash", ChurchId = otherChurchId, Status = UserStatus.Approved, Role = MemberRole.Dirigente };
+        await users.AddAsync(actor);
+        var letter = new PreachingLetter { UserId = Guid.NewGuid(), ChurchId = churchId, PreacherRequestId = Guid.NewGuid(), LetterNumber = "CP-1", ApprovedByUserId = Guid.NewGuid(), ApprovedAt = DateTimeOffset.UtcNow, PdfStoragePath = "x.pdf", QrCodeValue = "qr" };
+        await letters.AddAsync(letter);
+        var service = new PreachingLetterService(letters, users, churches, new HierarchicalAuthorizationService(users, churches), new LocalFileStorage(), audit);
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.SuspendAsync(letter.Id, actor.Id));
+        Assert.False((await letters.GetByIdAsync(letter.Id))!.Suspended);
     }
 
 }

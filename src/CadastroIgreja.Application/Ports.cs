@@ -76,3 +76,13 @@ public interface IPreachingLetterPdfGenerator
 {
     Task<byte[]> GenerateAsync(PreachingLetterPdfModel model, CancellationToken cancellationToken = default);
 }
+
+public interface IHierarchicalAuthorizationService
+{
+    Task<bool> CanApproveUserAsync(Guid? approverId, User targetUser, CancellationToken cancellationToken = default);
+    Task<bool> CanApproveRoleChangeAsync(Guid? approverId, User targetUser, MemberRole requestedRole, CancellationToken cancellationToken = default);
+    Task<bool> CanApprovePreacherStepAsync(Guid? approverId, PreacherRequest request, CancellationToken cancellationToken = default);
+    Task<bool> CanIssueLetterAsync(Guid? approverId, PreacherRequest request, CancellationToken cancellationToken = default);
+    Task<bool> CanSuspendLetterAsync(Guid? actorId, PreachingLetter letter, CancellationToken cancellationToken = default);
+    Task<bool> CanViewAuditLogsAsync(Guid? actorId, CancellationToken cancellationToken = default);
+}
