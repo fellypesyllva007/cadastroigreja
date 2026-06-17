@@ -10,7 +10,7 @@ using Microsoft.Extensions.Options;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddApplication().AddInfrastructure();
-builder.Services.AddAuthentication("Bearer").AddScheme<AuthenticationSchemeOptions, DemoBearerHandler>("Bearer", null);
+builder.Services.AddAuthentication("Bearer").AddScheme<AuthenticationSchemeOptions, JwtBearerHandler>("Bearer", null);
 builder.Services.AddAuthorization();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApi();
@@ -23,6 +23,18 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next();
+    }
+    catch (UnauthorizedAccessException ex)
+    {
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        await context.Response.WriteAsync(ex.Message);
+    }
+});
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -121,11 +133,16 @@ preacherRequests.MapPost("/{id:guid}/reject", async Task<Results<NoContent, NotF
 var letters = app.MapGroup("/api/letters").WithTags("Letters");
 letters.MapGet("/", async (Guid? userId, PreachingLetterService service, CancellationToken ct) =>
     TypedResults.Ok(await service.ListAsync(userId, ct))).RequireAuthorization();
-letters.MapGet("/{id:guid}/validate", async Task<Results<Ok<PreachingLetterResponse>, NotFound>> (Guid id, PreachingLetterService service, CancellationToken ct) =>
+letters.MapGet("/{id:guid}/validate", async Task<Results<Ok<PreachingLetterValidationResponse>, NotFound>> (Guid id, PreachingLetterService service, CancellationToken ct) =>
 {
     var letter = await service.ValidateAsync(id, ct);
     return letter is null ? TypedResults.NotFound() : TypedResults.Ok(letter);
 }).AllowAnonymous();
+letters.MapGet("/{id:guid}/pdf", async Task<Results<FileContentHttpResult, NotFound>> (Guid id, PreachingLetterService service, CancellationToken ct) =>
+{
+    var pdf = await service.GetPdfAsync(id, ct);
+    return pdf is null ? TypedResults.NotFound() : TypedResults.File(pdf, "application/pdf", $"carta-{id}.pdf");
+}).RequireAuthorization();
 letters.MapPost("/{id:guid}/suspend", async Task<Results<Ok<PreachingLetterResponse>, NotFound>> (Guid id, ClaimsPrincipal principal, PreachingLetterService service, CancellationToken ct) =>
 {
     var letter = await service.SuspendAsync(id, CurrentUserId(principal), ct);
@@ -137,44 +154,49 @@ letters.MapPost("/{id:guid}/renew", async Task<Results<Ok<PreachingLetterRespons
     return letter is null ? TypedResults.NotFound() : TypedResults.Ok(letter);
 }).RequireAuthorization();
 
+
+var leaderSignatures = app.MapGroup("/api/leaders/signature").WithTags("LeaderSignatures").RequireAuthorization();
+leaderSignatures.MapGet("/", async Task<Results<Ok<LeaderSignatureResponse>, NotFound>> (ClaimsPrincipal principal, LeaderSignatureService service, CancellationToken ct) =>
+{
+    var response = await service.GetAsync(CurrentUserId(principal)!.Value, ct);
+    return response is null ? TypedResults.NotFound() : TypedResults.Ok(response);
+});
+leaderSignatures.MapPost("/", async Task<Results<Ok<LeaderSignatureResponse>, BadRequest<string>>> (LeaderSignatureRequest request, ClaimsPrincipal principal, LeaderSignatureService service, CancellationToken ct) =>
+{
+    try { return TypedResults.Ok(await service.SaveAsync(CurrentUserId(principal)!.Value, request, ct)); }
+    catch (InvalidOperationException ex) { return TypedResults.BadRequest(ex.Message); }
+});
+leaderSignatures.MapPut("/", async Task<Results<Ok<LeaderSignatureResponse>, BadRequest<string>>> (LeaderSignatureRequest request, ClaimsPrincipal principal, LeaderSignatureService service, CancellationToken ct) =>
+{
+    try { return TypedResults.Ok(await service.SaveAsync(CurrentUserId(principal)!.Value, request, ct)); }
+    catch (InvalidOperationException ex) { return TypedResults.BadRequest(ex.Message); }
+});
+
 var auditLogs = app.MapGroup("/api/audit-logs").WithTags("Audit").RequireAuthorization();
-auditLogs.MapGet("/", async (string? entityName, string? entityId, AuditLogService service, CancellationToken ct) =>
-    TypedResults.Ok(await service.ListAsync(entityName, entityId, ct)));
+auditLogs.MapGet("/", async (string? entityName, string? entityId, ClaimsPrincipal principal, AuditLogService service, CancellationToken ct) =>
+    TypedResults.Ok(await service.ListAuthorizedAsync(CurrentUserId(principal), entityName, entityId, ct)));
 
 app.Run();
 
 static Guid? CurrentUserId(ClaimsPrincipal? principal) =>
     Guid.TryParse(principal?.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : null;
 
-internal sealed class DemoBearerHandler(IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder)
+internal sealed class JwtBearerHandler(IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder, IConfiguration configuration)
     : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         var header = Request.Headers.Authorization.ToString();
-        if (header.Equals("Bearer dev-admin", StringComparison.OrdinalIgnoreCase))
+        if (!header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)) return Task.FromResult(AuthenticateResult.NoResult());
+
+        var token = header[7..].Trim();
+        if (!HmacJwtTokenService.TryValidate(token, configuration, out var principal)) return Task.FromResult(AuthenticateResult.Fail("Token inválido ou expirado."));
+
+        var claims = new[]
         {
-            var devClaims = new[] { new Claim(ClaimTypes.NameIdentifier, Guid.Empty.ToString()), new Claim(ClaimTypes.Email, "admin@cadastroigreja.local") };
-            return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(new ClaimsIdentity(devClaims, Scheme.Name)), Scheme.Name)));
-        }
-
-        if (!header.StartsWith("Bearer demo.", StringComparison.OrdinalIgnoreCase)) return Task.FromResult(AuthenticateResult.NoResult());
-
-        var tokenParts = header[7..].Split('.');
-        if (tokenParts.Length != 3) return Task.FromResult(AuthenticateResult.Fail("Token inválido."));
-
-        string[] payload;
-        try
-        {
-            payload = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(tokenParts[1])).Split('|');
-        }
-        catch (FormatException)
-        {
-            return Task.FromResult(AuthenticateResult.Fail("Token inválido."));
-        }
-        if (payload.Length < 2) return Task.FromResult(AuthenticateResult.Fail("Token inválido."));
-
-        var claims = new[] { new Claim(ClaimTypes.NameIdentifier, payload[0]), new Claim(ClaimTypes.Email, payload[1]) };
+            new Claim(ClaimTypes.NameIdentifier, principal.UserId.ToString()),
+            new Claim(ClaimTypes.Email, principal.Email)
+        };
         var identity = new ClaimsIdentity(claims, Scheme.Name);
         return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), Scheme.Name)));
     }

@@ -114,3 +114,32 @@ public sealed class InMemoryAuditLogRepository : IAuditLogRepository
         return Task.FromResult<IReadOnlyCollection<AuditLog>>(query.OrderByDescending(l => l.CreatedAt).ToArray());
     }
 }
+
+public sealed class InMemoryLeaderSignatureRepository : ILeaderSignatureRepository
+{
+    private readonly ConcurrentDictionary<Guid, LeaderSignature> _signatures = new();
+    public Task AddAsync(LeaderSignature signature, CancellationToken cancellationToken = default) { _signatures[signature.Id] = signature; return Task.CompletedTask; }
+    public Task<LeaderSignature?> GetActiveByLeaderIdAsync(Guid leaderId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_signatures.Values.Where(s => s.LeaderId == leaderId && s.Active).OrderByDescending(s => s.CreatedAt).FirstOrDefault());
+    public Task<IReadOnlyCollection<LeaderSignature>> ListByLeaderIdAsync(Guid leaderId, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyCollection<LeaderSignature>>(_signatures.Values.Where(s => s.LeaderId == leaderId).OrderByDescending(s => s.CreatedAt).ToArray());
+    public Task SaveAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+}
+
+public sealed class LocalFileStorage : IFileStorage
+{
+    private readonly string _root = Path.Combine(Path.GetTempPath(), "cadastroigreja-storage");
+    public async Task<string> SaveAsync(string path, byte[] content, string contentType, CancellationToken cancellationToken = default)
+    {
+        var safePath = path.Replace('\\', '/').TrimStart('/');
+        var fullPath = Path.Combine(_root, safePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+        await File.WriteAllBytesAsync(fullPath, content, cancellationToken);
+        return safePath;
+    }
+    public async Task<byte[]?> ReadAsync(string path, CancellationToken cancellationToken = default)
+    {
+        var fullPath = Path.Combine(_root, path.Replace('\\', '/').TrimStart('/'));
+        return File.Exists(fullPath) ? await File.ReadAllBytesAsync(fullPath, cancellationToken) : null;
+    }
+}

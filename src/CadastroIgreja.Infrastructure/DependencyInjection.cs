@@ -6,12 +6,15 @@ namespace CadastroIgreja.Infrastructure;
 public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services) => services
-        .AddSingleton<IChurchRepository, InMemoryChurchRepository>()
-        .AddSingleton<IUserRepository, InMemoryUserRepository>()
-        .AddSingleton<IRoleChangeRequestRepository, InMemoryRoleChangeRequestRepository>()
-        .AddSingleton<IPreacherRequestRepository, InMemoryPreacherRequestRepository>()
-        .AddSingleton<IPreachingLetterRepository, InMemoryPreachingLetterRepository>()
-        .AddSingleton<IAuditLogRepository, InMemoryAuditLogRepository>()
+        .AddSingleton<PostgresConnectionFactory>()
+        .AddScoped<IChurchRepository, PostgresChurchRepository>()
+        .AddScoped<IUserRepository, PostgresUserRepository>()
+        .AddScoped<IRoleChangeRequestRepository, PostgresRoleChangeRequestRepository>()
+        .AddScoped<IPreacherRequestRepository, PostgresPreacherRequestRepository>()
+        .AddScoped<IPreachingLetterRepository, PostgresPreachingLetterRepository>()
+        .AddScoped<ILeaderSignatureRepository, PostgresLeaderSignatureRepository>()
+        .AddSingleton<IFileStorage, LocalFileStorage>()
+        .AddScoped<IAuditLogRepository, PostgresAuditLogRepository>()
         .AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>()
-        .AddSingleton<ITokenService, DemoTokenService>();
+        .AddSingleton<ITokenService, HmacJwtTokenService>();
 }
