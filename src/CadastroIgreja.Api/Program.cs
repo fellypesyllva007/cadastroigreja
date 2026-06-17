@@ -133,11 +133,16 @@ preacherRequests.MapPost("/{id:guid}/reject", async Task<Results<NoContent, NotF
 var letters = app.MapGroup("/api/letters").WithTags("Letters");
 letters.MapGet("/", async (Guid? userId, PreachingLetterService service, CancellationToken ct) =>
     TypedResults.Ok(await service.ListAsync(userId, ct))).RequireAuthorization();
-letters.MapGet("/{id:guid}/validate", async Task<Results<Ok<PreachingLetterResponse>, NotFound>> (Guid id, PreachingLetterService service, CancellationToken ct) =>
+letters.MapGet("/{id:guid}/validate", async Task<Results<Ok<PreachingLetterValidationResponse>, NotFound>> (Guid id, PreachingLetterService service, CancellationToken ct) =>
 {
     var letter = await service.ValidateAsync(id, ct);
     return letter is null ? TypedResults.NotFound() : TypedResults.Ok(letter);
 }).AllowAnonymous();
+letters.MapGet("/{id:guid}/pdf", async Task<Results<FileContentHttpResult, NotFound>> (Guid id, PreachingLetterService service, CancellationToken ct) =>
+{
+    var pdf = await service.GetPdfAsync(id, ct);
+    return pdf is null ? TypedResults.NotFound() : TypedResults.File(pdf, "application/pdf", $"carta-{id}.pdf");
+}).RequireAuthorization();
 letters.MapPost("/{id:guid}/suspend", async Task<Results<Ok<PreachingLetterResponse>, NotFound>> (Guid id, ClaimsPrincipal principal, PreachingLetterService service, CancellationToken ct) =>
 {
     var letter = await service.SuspendAsync(id, CurrentUserId(principal), ct);
@@ -148,6 +153,24 @@ letters.MapPost("/{id:guid}/renew", async Task<Results<Ok<PreachingLetterRespons
     var letter = await service.RenewAsync(id, CurrentUserId(principal), ct);
     return letter is null ? TypedResults.NotFound() : TypedResults.Ok(letter);
 }).RequireAuthorization();
+
+
+var leaderSignatures = app.MapGroup("/api/leaders/signature").WithTags("LeaderSignatures").RequireAuthorization();
+leaderSignatures.MapGet("/", async Task<Results<Ok<LeaderSignatureResponse>, NotFound>> (ClaimsPrincipal principal, LeaderSignatureService service, CancellationToken ct) =>
+{
+    var response = await service.GetAsync(CurrentUserId(principal)!.Value, ct);
+    return response is null ? TypedResults.NotFound() : TypedResults.Ok(response);
+});
+leaderSignatures.MapPost("/", async Task<Results<Ok<LeaderSignatureResponse>, BadRequest<string>>> (LeaderSignatureRequest request, ClaimsPrincipal principal, LeaderSignatureService service, CancellationToken ct) =>
+{
+    try { return TypedResults.Ok(await service.SaveAsync(CurrentUserId(principal)!.Value, request, ct)); }
+    catch (InvalidOperationException ex) { return TypedResults.BadRequest(ex.Message); }
+});
+leaderSignatures.MapPut("/", async Task<Results<Ok<LeaderSignatureResponse>, BadRequest<string>>> (LeaderSignatureRequest request, ClaimsPrincipal principal, LeaderSignatureService service, CancellationToken ct) =>
+{
+    try { return TypedResults.Ok(await service.SaveAsync(CurrentUserId(principal)!.Value, request, ct)); }
+    catch (InvalidOperationException ex) { return TypedResults.BadRequest(ex.Message); }
+});
 
 var auditLogs = app.MapGroup("/api/audit-logs").WithTags("Audit").RequireAuthorization();
 auditLogs.MapGet("/", async (string? entityName, string? entityId, AuditLogService service, CancellationToken ct) =>

@@ -60,7 +60,7 @@ public sealed class WorkflowTests
         await users.AddAsync(user);
         await users.AddAsync(approver);
 
-        var service = new PreacherRequestService(preacherRequests, letters, users, churches, audit);
+        var service = new PreacherRequestService(preacherRequests, letters, users, churches, new InMemoryLeaderSignatureRepository(), new LocalFileStorage(), new PlainPdfPreachingLetterGenerator(), audit);
         var requestId = await service.CreateAsync(new CreatePreacherRequest(user.Id, "Chamado validado"));
 
         var first = await service.ApproveAsync(requestId, approver.Id);
@@ -110,6 +110,49 @@ public sealed class WorkflowTests
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.ApproveAsync(requestId, memberApprover.Id));
         Assert.Equal(MemberRole.Membro, (await users.GetByIdAsync(user.Id))!.Role);
+    }
+
+    [Fact]
+    public async Task Final_approval_generates_pdf_with_approved_at_qr_code_and_missing_signature_audit()
+    {
+        var churches = new InMemoryChurchRepository();
+        var users = new InMemoryUserRepository();
+        var preacherRequests = new InMemoryPreacherRequestRepository();
+        var letters = new InMemoryPreachingLetterRepository();
+        var signatures = new InMemoryLeaderSignatureRepository();
+        var storage = new LocalFileStorage();
+        var audit = new InMemoryAuditLogRepository();
+        var churchId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var preacher = new User { FullName = "Pregador Dinâmico", Email = "pregador@example.com", PasswordHash = "hash", ChurchId = churchId, Status = UserStatus.Approved, ChurchJoinedAt = new DateOnly(2020, 2, 14) };
+        var approver = new User { FullName = "Dirigente Dinâmico", Email = "dirigente2@example.com", PasswordHash = "hash", ChurchId = churchId, Status = UserStatus.Approved, Role = MemberRole.Dirigente };
+        await users.AddAsync(preacher);
+        await users.AddAsync(approver);
+        var service = new PreacherRequestService(preacherRequests, letters, users, churches, signatures, storage, new PlainPdfPreachingLetterGenerator(), audit);
+
+        var requestId = await service.CreateAsync(new CreatePreacherRequest(preacher.Id));
+        var approved = await service.ApproveAsync(requestId, approver.Id);
+
+        var letter = Assert.Single(await letters.ListAsync(preacher.Id));
+        var pdf = await storage.ReadAsync(letter.PdfStoragePath);
+        Assert.Equal(approved!.DecidedAt, letter.ApprovedAt);
+        Assert.StartsWith("%PDF", System.Text.Encoding.UTF8.GetString(pdf!));
+        Assert.Contains(letter.Id.ToString(), letter.QrCodeValue);
+        Assert.Contains(await audit.ListAsync(nameof(LeaderSignature), approver.Id.ToString()), log => log.Action == "LeaderSignatureMissing");
+    }
+
+    [Fact]
+    public async Task Leader_signature_replacement_keeps_only_one_active_signature()
+    {
+        var repo = new InMemoryLeaderSignatureRepository();
+        var service = new LeaderSignatureService(repo, new LocalFileStorage(), new InMemoryAuditLogRepository());
+        var leaderId = Guid.NewGuid();
+
+        await service.SaveAsync(leaderId, new LeaderSignatureRequest("assinatura.png", "image/png", new byte[] { 1, 2, 3 }));
+        var active = await service.SaveAsync(leaderId, new LeaderSignatureRequest("assinatura.jpg", "image/jpeg", new byte[] { 4, 5, 6 }));
+
+        Assert.True(active.Active);
+        Assert.Single((await repo.ListByLeaderIdAsync(leaderId)).Where(s => s.Active));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.SaveAsync(leaderId, new LeaderSignatureRequest("assinatura.gif", "image/gif", new byte[] { 1 })));
     }
 
 }

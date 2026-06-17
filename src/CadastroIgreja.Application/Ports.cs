@@ -57,3 +57,22 @@ public interface IAuditLogRepository
     Task AddAsync(AuditLog log, CancellationToken cancellationToken = default);
     Task<IReadOnlyCollection<AuditLog>> ListAsync(string? entityName, string? entityId, CancellationToken cancellationToken = default);
 }
+
+public interface ILeaderSignatureRepository
+{
+    Task AddAsync(LeaderSignature signature, CancellationToken cancellationToken = default);
+    Task<LeaderSignature?> GetActiveByLeaderIdAsync(Guid leaderId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyCollection<LeaderSignature>> ListByLeaderIdAsync(Guid leaderId, CancellationToken cancellationToken = default);
+    Task SaveAsync(CancellationToken cancellationToken = default);
+}
+
+public interface IFileStorage
+{
+    Task<string> SaveAsync(string path, byte[] content, string contentType, CancellationToken cancellationToken = default);
+    Task<byte[]?> ReadAsync(string path, CancellationToken cancellationToken = default);
+}
+
+public interface IPreachingLetterPdfGenerator
+{
+    Task<byte[]> GenerateAsync(PreachingLetterPdfModel model, CancellationToken cancellationToken = default);
+}

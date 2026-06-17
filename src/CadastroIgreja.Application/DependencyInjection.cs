@@ -11,5 +11,7 @@ public static class DependencyInjection
         .AddScoped<RoleChangeRequestService>()
         .AddScoped<PreacherRequestService>()
         .AddScoped<PreachingLetterService>()
+        .AddScoped<LeaderSignatureService>()
+        .AddSingleton<IPreachingLetterPdfGenerator, PlainPdfPreachingLetterGenerator>()
         .AddScoped<AuditLogService>();
 }
