@@ -32,7 +32,7 @@ PostgreSQL
 
 ## Autenticação
 
-Token demonstrativo no runtime atual; contrato JWT Bearer documentado para implementação produtiva
+JWT Bearer HMAC no runtime atual; refresh token persistido, rotação, revogação e políticas produtivas ainda pendentes
 
 ## Armazenamento
 

@@ -201,7 +201,7 @@ components:
         expiresIn:
           type: integer
 
-# Extensões implementadas no MVP de 80%:
+# Extensões implementadas no MVP técnico:
 # - POST /api/users/{id}/reject
 # - POST /api/role-requests/{id}/reject
 # - POST /api/preacher-requests/{id}/reject

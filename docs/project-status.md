@@ -4,9 +4,9 @@ Atualizado em 2026-06-17.
 
 ## Diagnóstico honesto
 
-O projeto está em estado de **protótipo/MVP técnico parcial**. Ele possui uma base útil de domínio, contratos, API mínima, schema PostgreSQL versionado, testes de alguns fluxos e um app Flutter iniciado, mas ainda não deve ser tratado como produto pronto para produção ou homologação com dados reais.
+O projeto está em estado de **MVP técnico parcial, acima de um esqueleto inicial, mas abaixo de um produto pronto para homologação ou produção**. Ele possui base útil de domínio, contratos, API mínima, autenticação JWT HMAC em runtime, schema PostgreSQL versionado, testes de alguns fluxos e app Flutter iniciado. A afirmação de que o estado geral estaria abaixo de um marco inicial muito baixo não se sustenta pelas evidências do repositório; ainda assim, o projeto continua incompleto para uso real com dados sensíveis.
 
-A documentação anterior usava percentuais de conclusão. Esses indicadores foram removidos porque davam uma impressão de avanço maior do que o código realmente sustenta. A avaliação atual passa a ser qualitativa e baseada nas evidências do repositório.
+A documentação anterior usava indicadores numéricos de conclusão. Esses indicadores foram removidos porque davam uma impressão de precisão que o código não sustenta. A avaliação atual passa a ser qualitativa e baseada nas evidências do repositório.
 
 ## O que existe de fato
 
@@ -27,11 +27,11 @@ O schema PostgreSQL está versionado, mas a API ainda usa repositórios em memó
 
 ### Autenticação e sessão
 
-O runtime usa autenticação demonstrativa e tokens `demo.*`/`dev-admin`. JWT assinado, validação criptográfica, expiração curta e refresh token persistido ainda precisam ser implementados.
+O runtime já possui geração e validação de token JWT HMAC para o access token, mas ainda falta endurecimento produtivo: rotação/expiração operacional, refresh token realmente persistido e revogável, configuração segura de chaves, políticas de sessão e tratamento completo de credenciais.
 
 ### Autorização por cargo e hierarquia
 
-Os endpoints exigem autenticação, mas as regras ministeriais descritas na documentação ainda não estão aplicadas de forma segura nos serviços de aprovação. É necessário validar cargo, igreja, escopo hierárquico e permissões negativas.
+Os endpoints exigem autenticação e algumas aprovações checam se o aprovador é Pastor ou Dirigente, mas as regras ministeriais descritas na documentação ainda não estão completas. É necessário validar cargo, igreja, escopo hierárquico, etapa esperada, impedimento de autoaprovação quando aplicável e permissões negativas.
 
 ### Cartas
 
@@ -45,9 +45,9 @@ O app Flutter tem estrutura inicial, mas precisa ser validado localmente com `fl
 
 1. Corrigir inconsistências do Flutter e garantir que o app compile.
 2. Implementar repositórios PostgreSQL reais e trocar o DI para persistência em banco.
-3. Substituir autenticação demonstrativa por JWT real com refresh token persistido.
-4. Implementar autorização por cargo e hierarquia nos fluxos de aprovação.
-5. Alinhar domínio C# e schema SQL, especialmente status, campos obrigatórios e cartas.
+3. Endurecer autenticação e sessão com refresh token persistido, revogação, chaves seguras e políticas produtivas.
+4. Implementar autorização por cargo, igreja, hierarquia e etapa nos fluxos de aprovação.
+5. Alinhar domínio C#, contrato OpenAPI e schema SQL, especialmente status, campos obrigatórios e cartas.
 6. Implementar emissão documental real com PDF, QR Code, storage e validação pública.
 7. Adicionar testes negativos de autorização e testes de integração com PostgreSQL.
 8. Rodar CI completo em ambiente com .NET, Flutter e PostgreSQL disponíveis.
