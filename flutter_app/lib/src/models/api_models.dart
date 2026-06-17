@@ -114,6 +114,7 @@ class UserProfile {
     required this.fullName,
     required this.email,
     required this.churchId,
+    required this.preacherRequestId,
     required this.role,
     required this.status,
     this.phone,
@@ -134,6 +135,7 @@ class UserProfile {
         email: json['email'] as String,
         phone: json['phone'] as String?,
         churchId: json['churchId'] as String,
+        preacherRequestId: json['preacherRequestId'] as String,
         role: MemberRoleApi.fromApi(json['role'] as String),
         status: json['status'] as String,
       );
