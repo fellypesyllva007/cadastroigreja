@@ -10,7 +10,7 @@ using Microsoft.Extensions.Options;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddApplication().AddInfrastructure();
-builder.Services.AddAuthentication("Bearer").AddScheme<AuthenticationSchemeOptions, DemoBearerHandler>("Bearer", null);
+builder.Services.AddAuthentication("Bearer").AddScheme<AuthenticationSchemeOptions, JwtBearerHandler>("Bearer", null);
 builder.Services.AddAuthorization();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApi();
@@ -23,6 +23,18 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next();
+    }
+    catch (UnauthorizedAccessException ex)
+    {
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        await context.Response.WriteAsync(ex.Message);
+    }
+});
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -146,35 +158,22 @@ app.Run();
 static Guid? CurrentUserId(ClaimsPrincipal? principal) =>
     Guid.TryParse(principal?.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : null;
 
-internal sealed class DemoBearerHandler(IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder)
+internal sealed class JwtBearerHandler(IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder, IConfiguration configuration)
     : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         var header = Request.Headers.Authorization.ToString();
-        if (header.Equals("Bearer dev-admin", StringComparison.OrdinalIgnoreCase))
+        if (!header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)) return Task.FromResult(AuthenticateResult.NoResult());
+
+        var token = header[7..].Trim();
+        if (!HmacJwtTokenService.TryValidate(token, configuration, out var principal)) return Task.FromResult(AuthenticateResult.Fail("Token inválido ou expirado."));
+
+        var claims = new[]
         {
-            var devClaims = new[] { new Claim(ClaimTypes.NameIdentifier, Guid.Empty.ToString()), new Claim(ClaimTypes.Email, "admin@cadastroigreja.local") };
-            return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(new ClaimsIdentity(devClaims, Scheme.Name)), Scheme.Name)));
-        }
-
-        if (!header.StartsWith("Bearer demo.", StringComparison.OrdinalIgnoreCase)) return Task.FromResult(AuthenticateResult.NoResult());
-
-        var tokenParts = header[7..].Split('.');
-        if (tokenParts.Length != 3) return Task.FromResult(AuthenticateResult.Fail("Token inválido."));
-
-        string[] payload;
-        try
-        {
-            payload = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(tokenParts[1])).Split('|');
-        }
-        catch (FormatException)
-        {
-            return Task.FromResult(AuthenticateResult.Fail("Token inválido."));
-        }
-        if (payload.Length < 2) return Task.FromResult(AuthenticateResult.Fail("Token inválido."));
-
-        var claims = new[] { new Claim(ClaimTypes.NameIdentifier, payload[0]), new Claim(ClaimTypes.Email, payload[1]) };
+            new Claim(ClaimTypes.NameIdentifier, principal.UserId.ToString()),
+            new Claim(ClaimTypes.Email, principal.Email)
+        };
         var identity = new ClaimsIdentity(claims, Scheme.Name);
         return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), Scheme.Name)));
     }

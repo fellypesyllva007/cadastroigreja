@@ -28,7 +28,7 @@ public sealed class WorkflowTests
         var churches = new InMemoryChurchRepository();
         var users = new InMemoryUserRepository();
         var audit = new InMemoryAuditLogRepository();
-        var service = new AuthService(users, churches, new Pbkdf2PasswordHasher(), new DemoTokenService(), audit);
+        var service = new AuthService(users, churches, new Pbkdf2PasswordHasher(), new TestTokenService(), audit);
         var churchId = Guid.Parse("11111111-1111-1111-1111-111111111111");
 
         var userId = await service.RegisterAsync(new RegisterUserRequest("Maria Silva", "maria@example.com", "SenhaForte123", churchId, null));
@@ -56,14 +56,16 @@ public sealed class WorkflowTests
         var casaId = await churchService.CreateAsync(new CreateChurchRequest("Casa", ChurchType.CasaOracao, localId));
 
         var user = new User { FullName = "João", Email = "joao@example.com", PasswordHash = "hash", ChurchId = casaId, Status = UserStatus.Approved };
+        var approver = new User { FullName = "Pastor", Email = "pastor@example.com", PasswordHash = "hash", ChurchId = localId, Status = UserStatus.Approved, Role = MemberRole.Pastor };
         await users.AddAsync(user);
+        await users.AddAsync(approver);
 
         var service = new PreacherRequestService(preacherRequests, letters, users, churches, audit);
         var requestId = await service.CreateAsync(new CreatePreacherRequest(user.Id, "Chamado validado"));
 
-        var first = await service.ApproveAsync(requestId);
-        var second = await service.ApproveAsync(requestId);
-        var third = await service.ApproveAsync(requestId);
+        var first = await service.ApproveAsync(requestId, approver.Id);
+        var second = await service.ApproveAsync(requestId, approver.Id);
+        var third = await service.ApproveAsync(requestId, approver.Id);
 
         Assert.Equal(PreacherApprovalStep.CongregacaoLocal, first!.CurrentStep);
         Assert.Equal(PreacherApprovalStep.Setorial, second!.CurrentStep);
@@ -80,14 +82,40 @@ public sealed class WorkflowTests
         var requests = new InMemoryRoleChangeRequestRepository();
         var audit = new InMemoryAuditLogRepository();
         var user = new User { FullName = "Ana", Email = "ana@example.com", PasswordHash = "hash", ChurchId = Guid.NewGuid(), Status = UserStatus.Approved };
+        var approver = new User { FullName = "Dirigente", Email = "dirigente@example.com", PasswordHash = "hash", ChurchId = user.ChurchId, Status = UserStatus.Approved, Role = MemberRole.Dirigente };
         await users.AddAsync(user);
+        await users.AddAsync(approver);
 
         var service = new RoleChangeRequestService(requests, users, audit);
         var requestId = await service.CreateAsync(new CreateRoleChangeRequest(user.Id, MemberRole.Diacono, "Serviço local"));
-        var approved = await service.ApproveAsync(requestId, Guid.NewGuid());
+        var approved = await service.ApproveAsync(requestId, approver.Id);
 
         Assert.True(approved);
         Assert.Equal(MemberRole.Diacono, (await users.GetByIdAsync(user.Id))!.Role);
         Assert.Contains(await audit.ListAsync(nameof(RoleChangeRequest), requestId.ToString()), log => log.Action == "RoleChangeApproved");
     }
+    [Fact]
+    public async Task Role_change_approval_rejects_member_without_ministerial_authority()
+    {
+        var users = new InMemoryUserRepository();
+        var requests = new InMemoryRoleChangeRequestRepository();
+        var audit = new InMemoryAuditLogRepository();
+        var user = new User { FullName = "Bruno", Email = "bruno@example.com", PasswordHash = "hash", ChurchId = Guid.NewGuid(), Status = UserStatus.Approved };
+        var memberApprover = new User { FullName = "Membro", Email = "membro@example.com", PasswordHash = "hash", ChurchId = user.ChurchId, Status = UserStatus.Approved, Role = MemberRole.Membro };
+        await users.AddAsync(user);
+        await users.AddAsync(memberApprover);
+
+        var service = new RoleChangeRequestService(requests, users, audit);
+        var requestId = await service.CreateAsync(new CreateRoleChangeRequest(user.Id, MemberRole.Presbitero, "Teste negativo"));
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.ApproveAsync(requestId, memberApprover.Id));
+        Assert.Equal(MemberRole.Membro, (await users.GetByIdAsync(user.Id))!.Role);
+    }
+
+}
+
+
+internal sealed class TestTokenService : ITokenService
+{
+    public AuthTokenResponse Create(User user) => new("test-access-token", "test-refresh-token", 3600);
 }
