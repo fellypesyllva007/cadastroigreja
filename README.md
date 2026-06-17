@@ -20,6 +20,7 @@ Plataformas suportadas:
 - iOS
 - Windows
 - macOS
+- Linux
 
 ## Backend
 
