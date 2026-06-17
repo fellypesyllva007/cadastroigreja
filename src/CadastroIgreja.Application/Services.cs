@@ -66,6 +66,20 @@ public sealed class ChurchService(IChurchRepository churches, IAuditLogRepositor
     };
 }
 
+
+internal static class MinisterialAuthorization
+{
+    public static async Task EnsureApproverAsync(IUserRepository users, Guid? approverId, CancellationToken ct)
+    {
+        if (approverId is null) throw new UnauthorizedAccessException("Aprovador autenticado é obrigatório.");
+        var approver = await users.GetByIdAsync(approverId.Value, ct);
+        if (approver is null || approver.Status != UserStatus.Approved || (approver.Role != MemberRole.Dirigente && approver.Role != MemberRole.Pastor))
+        {
+            throw new UnauthorizedAccessException("Aprovador sem permissão ministerial para esta ação.");
+        }
+    }
+}
+
 public sealed class UserService(IUserRepository users, IAuditLogRepository audit)
 {
     public async Task<UserProfileResponse?> GetProfileAsync(Guid id, CancellationToken ct = default)
@@ -76,6 +90,7 @@ public sealed class UserService(IUserRepository users, IAuditLogRepository audit
 
     public async Task<bool> ApproveAsync(Guid id, Guid? approverId = null, CancellationToken ct = default)
     {
+        await MinisterialAuthorization.EnsureApproverAsync(users, approverId, ct);
         var user = await users.GetByIdAsync(id, ct);
         if (user is null) return false;
         user.Status = UserStatus.Approved;
@@ -86,6 +101,7 @@ public sealed class UserService(IUserRepository users, IAuditLogRepository audit
 
     public async Task<bool> RejectAsync(Guid id, Guid? approverId = null, CancellationToken ct = default)
     {
+        await MinisterialAuthorization.EnsureApproverAsync(users, approverId, ct);
         var user = await users.GetByIdAsync(id, ct);
         if (user is null) return false;
         user.Status = UserStatus.Rejected;
@@ -111,6 +127,7 @@ public sealed class RoleChangeRequestService(IRoleChangeRequestRepository reques
 
     public async Task<bool> ApproveAsync(Guid id, Guid? approverId = null, CancellationToken ct = default)
     {
+        await MinisterialAuthorization.EnsureApproverAsync(users, approverId, ct);
         var request = await requests.GetByIdAsync(id, ct);
         if (request is null || request.Status != RequestStatus.Pending) return false;
         var user = await users.GetByIdAsync(request.UserId, ct);
@@ -126,6 +143,7 @@ public sealed class RoleChangeRequestService(IRoleChangeRequestRepository reques
 
     public async Task<bool> RejectAsync(Guid id, Guid? approverId = null, CancellationToken ct = default)
     {
+        await MinisterialAuthorization.EnsureApproverAsync(users, approverId, ct);
         var request = await requests.GetByIdAsync(id, ct);
         if (request is null || request.Status != RequestStatus.Pending) return false;
         request.Status = RequestStatus.Rejected;
@@ -156,6 +174,7 @@ public sealed class PreacherRequestService(IPreacherRequestRepository requests, 
 
     public async Task<PreacherRequestResponse?> ApproveAsync(Guid id, Guid? approverId = null, CancellationToken ct = default)
     {
+        await MinisterialAuthorization.EnsureApproverAsync(users, approverId, ct);
         var request = await requests.GetByIdAsync(id, ct);
         if (request is null || request.Status != RequestStatus.Pending) return null;
         if (request.CurrentStep != PreacherApprovalStep.Setorial)
@@ -178,6 +197,7 @@ public sealed class PreacherRequestService(IPreacherRequestRepository requests, 
 
     public async Task<bool> RejectAsync(Guid id, Guid? approverId = null, CancellationToken ct = default)
     {
+        await MinisterialAuthorization.EnsureApproverAsync(users, approverId, ct);
         var request = await requests.GetByIdAsync(id, ct);
         if (request is null || request.Status != RequestStatus.Pending) return false;
         request.Status = RequestStatus.Rejected;

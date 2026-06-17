@@ -117,6 +117,7 @@ class UserProfile {
     required this.role,
     required this.status,
     this.phone,
+    this.preacherRequestId,
   });
 
   final String id;
@@ -124,7 +125,7 @@ class UserProfile {
   final String email;
   final String? phone;
   final String churchId;
-  final String preacherRequestId;
+  final String? preacherRequestId;
   final MemberRole role;
   final String status;
 
@@ -134,6 +135,7 @@ class UserProfile {
         email: json['email'] as String,
         phone: json['phone'] as String?,
         churchId: json['churchId'] as String,
+        preacherRequestId: json['preacherRequestId'] as String?,
         role: MemberRoleApi.fromApi(json['role'] as String),
         status: json['status'] as String,
       );

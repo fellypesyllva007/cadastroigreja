@@ -13,5 +13,5 @@ public static class DependencyInjection
         .AddSingleton<IPreachingLetterRepository, InMemoryPreachingLetterRepository>()
         .AddSingleton<IAuditLogRepository, InMemoryAuditLogRepository>()
         .AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>()
-        .AddSingleton<ITokenService, DemoTokenService>();
+        .AddSingleton<ITokenService, HmacJwtTokenService>();
 }
