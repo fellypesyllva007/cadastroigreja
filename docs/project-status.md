@@ -1,33 +1,53 @@
-# Estado geral do projeto
+# Estado real do projeto
 
-Atualizado em 2026-06-16.
+Atualizado em 2026-06-17.
 
-## Critério de 99%
+## Diagnóstico honesto
 
-O projeto é considerado em **99% de estado geral** quando o MVP executável, os contratos, a persistência versionada, os fluxos Flutter, a documentação operacional e as validações automatizadas cobrem praticamente todo o escopo funcional planejado, restando apenas troca de integrações demonstrativas por serviços externos de produção e ajustes finais de ambiente.
+O projeto está em estado de **protótipo/MVP técnico parcial**. Ele possui uma base útil de domínio, contratos, API mínima, schema PostgreSQL versionado, testes de alguns fluxos e um app Flutter iniciado, mas ainda não deve ser tratado como produto pronto para produção ou homologação com dados reais.
 
-| Área | Peso | Estado | Evidências |
-| --- | ---: | ---: | --- |
-| Modelo de domínio e regras hierárquicas | 15% | 15% | Igrejas, usuários, cargos, solicitações, cartas, auditoria, validação de hierarquia e testes de regras essenciais cobertos. |
-| API backend do MVP | 25% | 24% | Cadastro/login, igrejas, perfil, aprovar/rejeitar membros, cargos e pregadores, emissão/validação/suspensão/renovação de cartas e auditoria expostos por endpoints. |
-| Persistência e segurança de referência | 15% | 14% | Repositórios em memória para execução local, hash PBKDF2, token demonstrativo, contrato JWT documentado e schema PostgreSQL versionado e validável em CI. |
-| Cliente Flutter | 20% | 20% | Modelos, API client e telas cobrem dashboard, login, igrejas, solicitações, aprovações, cartas e auditoria do fluxo principal. |
-| Documentação e contratos | 15% | 15% | README, arquitetura, API, permissões, database, deploy, OpenAPI e checklist de publicação estão sincronizados com o MVP. |
-| Testabilidade e validações | 10% | 10% | Testes de workflow backend, testes de modelos Flutter, validação SQL e pipeline CI para build, análise e testes. |
-| **Total** | **100%** | **99%** | Estado geral validado como completo para o MVP e pronto para homologação, restando apenas integrações produtivas externas. |
+A documentação anterior usava percentuais de conclusão. Esses indicadores foram removidos porque davam uma impressão de avanço maior do que o código realmente sustenta. A avaliação atual passa a ser qualitativa e baseada nas evidências do repositório.
 
-## Validação objetiva
+## O que existe de fato
 
-- Backend possui cobertura automatizada dos fluxos críticos de hierarquia de igrejas, cadastro, solicitação de pregador, emissão de carta, alteração de cargo e auditoria.
-- Banco possui migration PostgreSQL versionada e validação automatizada em ambiente PostgreSQL 16.
-- Flutter possui testes de modelos e etapa de análise/teste configurada no pipeline.
-- OpenAPI e documentação operacional descrevem endpoints, segurança, permissões e implantação.
+| Área | Estado observado | Evidências |
+| --- | --- | --- |
+| Backend ASP.NET Core | API minimal com rotas para cadastro/login, igrejas, perfil, aprovações, solicitações de pregador, cartas e auditoria. | Fluxos principais expostos e testados parcialmente. |
+| Domínio e aplicação | Regras centrais existem em forma simplificada. | Cadastro valida dados básicos, login exige usuário aprovado, fluxo de pregador avança por etapas e emite carta simples. |
+| Banco de dados | Migration PostgreSQL inicial relativamente completa. | Há tabelas para igrejas, usuários, cargos, tokens, solicitações, cartas, arquivos e auditoria, além de validações de hierarquia. |
+| Testes | Cobertura de alguns fluxos importantes. | Há testes para hierarquia inválida, cadastro, pregador, carta, cargo e auditoria. |
+| CI | Pipeline configurado para backend, banco e Flutter. | Restore/build/test .NET, validação SQL e análise/testes Flutter estão descritos no workflow. |
+| Flutter | Cliente iniciado com modelos, API client e telas do fluxo principal. | Ainda precisa revisão de compilação, alinhamento com backend e amadurecimento de UX. |
 
-## Pendências finais fora do MVP executável
+## Pendências críticas
 
-Estas pendências representam o 1% restante para produção plena em ambiente real:
+### Persistência runtime
 
-- Trocar o token demonstrativo por JWT assinado com rotação e refresh token persistido.
-- Trocar repositórios em memória por implementação PostgreSQL em runtime, mantendo o schema já versionado.
-- Integrar geração real de PDF/QR Code e armazenamento externo dos arquivos emitidos.
-- Configurar segredos, domínio, observabilidade e política de backup do ambiente de produção.
+O schema PostgreSQL está versionado, mas a API ainda usa repositórios em memória. Isso faz os dados desaparecerem quando a aplicação reinicia e impede uso real em produção.
+
+### Autenticação e sessão
+
+O runtime usa autenticação demonstrativa e tokens `demo.*`/`dev-admin`. JWT assinado, validação criptográfica, expiração curta e refresh token persistido ainda precisam ser implementados.
+
+### Autorização por cargo e hierarquia
+
+Os endpoints exigem autenticação, mas as regras ministeriais descritas na documentação ainda não estão aplicadas de forma segura nos serviços de aprovação. É necessário validar cargo, igreja, escopo hierárquico e permissões negativas.
+
+### Cartas
+
+O backend cria registros simples de carta. Geração real de PDF, QR Code, assinatura, layout, vínculo com arquivo e storage externo ainda são pendências.
+
+### Flutter
+
+O app Flutter tem estrutura inicial, mas precisa ser validado localmente com `flutter analyze` e `flutter test`, corrigindo inconsistências de modelos e melhorando telas ainda técnicas, como campos manuais de IDs.
+
+## Próximos passos recomendados
+
+1. Corrigir inconsistências do Flutter e garantir que o app compile.
+2. Implementar repositórios PostgreSQL reais e trocar o DI para persistência em banco.
+3. Substituir autenticação demonstrativa por JWT real com refresh token persistido.
+4. Implementar autorização por cargo e hierarquia nos fluxos de aprovação.
+5. Alinhar domínio C# e schema SQL, especialmente status, campos obrigatórios e cartas.
+6. Implementar emissão documental real com PDF, QR Code, storage e validação pública.
+7. Adicionar testes negativos de autorização e testes de integração com PostgreSQL.
+8. Rodar CI completo em ambiente com .NET, Flutter e PostgreSQL disponíveis.

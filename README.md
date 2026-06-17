@@ -32,13 +32,13 @@ PostgreSQL
 
 ## Autenticação
 
-JWT Bearer Token
+Token demonstrativo no runtime atual; contrato JWT Bearer documentado para implementação produtiva
 
 ## Armazenamento
 
-- Cartas PDF
-- Fotos de perfil
-- Documentos
+- Cartas PDF (pendente de implementação real)
+- Fotos de perfil (pendente)
+- Documentos (pendente)
 
 ---
 
@@ -119,13 +119,16 @@ A autorização de pregação é independente do cargo.
 
 ## Usuário
 
+Implementado no MVP técnico:
 - Cadastro
-- Login
-- Recuperação de senha
+- Login demonstrativo
 - Consulta de perfil
 - Solicitação de alteração de cargo
 - Solicitação de autorização para pregar
 - Consulta de cartas emitidas
+
+Pendente:
+- Recuperação de senha em fluxo produtivo
 
 ## Dirigente
 
@@ -207,7 +210,7 @@ Controle total do sistema:
 
 # Carta de Pregação
 
-A carta conterá:
+A carta planejada conterá:
 - Nome completo
 - Cargo
 - Igreja de origem
@@ -216,14 +219,16 @@ A carta conterá:
 - Data de validade
 - QR Code de validação
 
+No runtime atual, a carta é um registro simples com número, validade, status e URL de validação. A geração real de PDF, QR Code, assinatura, layout e armazenamento ainda não está implementada.
+
 ---
 
 # Segurança
 
-- Senhas armazenadas exclusivamente como hash forte.
-- Tokens JWT com expiração curta e refresh token rotacionável.
-- Todas as aprovações e alterações sensíveis registradas em auditoria.
-- Escopo de acesso calculado pela hierarquia da igreja do usuário.
+- Senhas armazenadas como hash PBKDF2 no backend.
+- A autenticação em execução ainda é demonstrativa (`demo.*`/`dev-admin`); JWT assinado, expiração curta e refresh token rotacionável são pendências.
+- Parte das aprovações e alterações sensíveis registra auditoria.
+- O escopo de acesso por hierarquia está documentado, mas ainda precisa ser aplicado de forma robusta nos endpoints e serviços de aprovação.
 
 ---
 
@@ -235,9 +240,11 @@ docker compose up -d db
 
 O banco é inicializado com as migrações em `database/migrations`. A especificação inicial da API está em `openapi/cadastroigreja.v1.yaml`.
 
-- JWT Authentication
-- Controle de permissões por cargo
-- Controle de permissões por nível hierárquico
+> Estado real: o schema PostgreSQL existe e é validável, mas a API registra repositórios em memória no runtime atual. Os dados não persistem ao reiniciar a aplicação até que os repositórios PostgreSQL sejam implementados e plugados no DI.
+
+- Autenticação JWT real
+- Controle efetivo de permissões por cargo
+- Controle efetivo de permissões por nível hierárquico
 - Auditoria de ações
 - Histórico de aprovações
 
