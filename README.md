@@ -6,43 +6,15 @@ Sistema de gestão e cadastro de membros, cargos, dirigentes e autorização de 
 
 Centralizar o cadastro de membros, controle ministerial, fluxo de aprovações e emissão de cartas de pregação através de uma plataforma moderna, segura e multiplataforma.
 
----
+## Tecnologias
 
-# Tecnologias
+- Frontend: Flutter, unificado em `frontend/`.
+- Backend: ASP.NET Core 9.
+- Banco de dados: PostgreSQL.
+- Autenticação: JWT Bearer HMAC no runtime atual.
+- Armazenamento planejado: cartas PDF, fotos de perfil e documentos.
 
-## Frontend
-
-Flutter
-
-Plataformas suportadas:
-- Web
-- Android
-- iOS
-- Windows
-- macOS
-- Linux
-
-## Backend
-
-ASP.NET Core 9
-
-## Banco de Dados
-
-PostgreSQL
-
-## Autenticação
-
-JWT Bearer HMAC no runtime atual; refresh token persistido, rotação, revogação e políticas produtivas ainda pendentes
-
-## Armazenamento
-
-- Cartas PDF (pendente de implementação real)
-- Fotos de perfil (pendente)
-- Documentos (pendente)
-
----
-
-# Estrutura Hierárquica
+## Estrutura hierárquica
 
 1. Sede
 2. Regional
@@ -58,23 +30,19 @@ Sede
                 └── Casa de Oração
 ```
 
----
+## Cadastro
 
-# Cadastro
+O usuário informa o nível ao qual pertence:
 
-O usuário informa o nível ao qual pertence.
-
-- Sede → seleciona apenas a Sede.
-- Regional → seleciona Sede e Regional.
-- Setorial → seleciona Sede, Regional e Setorial.
-- Congregação Local → seleciona Sede, Regional, Setorial e Congregação.
-- Casa de Oração → seleciona toda a hierarquia até a Casa.
+- Sede: seleciona apenas a Sede.
+- Regional: seleciona Sede e Regional.
+- Setorial: seleciona Sede, Regional e Setorial.
+- Congregação Local: seleciona Sede, Regional, Setorial e Congregação.
+- Casa de Oração: seleciona toda a hierarquia até a Casa.
 
 Todos os usuários iniciam como Membro.
 
----
-
-# Cargos
+## Cargos
 
 - Membro
 - Diácono
@@ -82,55 +50,51 @@ Todos os usuários iniciam como Membro.
 - Pastor
 - Dirigente
 
-Uma igreja pode possuir vários dirigentes.
+Uma igreja pode possuir vários dirigentes. O cargo não concede automaticamente autorização para pregar.
 
-O cargo não concede automaticamente autorização para pregar.
-
----
-
-# Controle de Pregadores
+## Controle de pregadores
 
 A autorização de pregação é independente do cargo.
 
-## Fluxo Casa de Oração
+### Fluxo Casa de Oração
 
 1. Solicitação do usuário.
 2. Aprovação do dirigente da Casa de Oração.
 3. Aprovação do dirigente da Congregação Local.
 4. Aprovação final do dirigente Setorial.
-5. Emissão da Carta de Pregação.
+5. Emissão da carta de pregação.
 
-## Fluxo Congregação Local
+### Fluxo Congregação Local
 
 1. Solicitação do usuário.
 2. Aprovação do dirigente Local.
 3. Aprovação final do dirigente Setorial.
-4. Emissão da Carta.
+4. Emissão da carta.
 
-## Fluxo Setorial
+### Fluxo Setorial
 
 1. Solicitação do usuário.
 2. Aprovação final do dirigente Setorial.
-3. Emissão da Carta.
+3. Emissão da carta.
 
----
+## Funcionalidades
 
-# Funcionalidades
-
-## Usuário
+### Usuário
 
 Implementado no MVP técnico:
+
 - Cadastro
-- Login demonstrativo
+- Login
 - Consulta de perfil
 - Solicitação de alteração de cargo
 - Solicitação de autorização para pregar
 - Consulta de cartas emitidas
 
 Pendente:
+
 - Recuperação de senha em fluxo produtivo
 
-## Dirigente
+### Dirigente
 
 - Aprovação de membros
 - Aprovação de cargos
@@ -138,172 +102,57 @@ Pendente:
 - Consulta de relatórios
 - Gerenciamento de igrejas subordinadas
 
-## Administração
+### Administração
 
-- Gerenciamento de Sedes
-- Regionais
-- Setoriais
-- Congregações Locais
-- Casas de Oração
+- Gerenciamento de Sedes, Regionais, Setoriais, Congregações Locais e Casas de Oração
 - Controle geral do sistema
+- Auditoria de aprovações
+- Configuração de regras globais
 
----
+## Matriz de permissões
 
-# Matriz de Permissões
+### Casa de Oração
 
-## Casa de Oração
+Pode aprovar membros da própria Casa, aprovar alterações de cargo locais, pré-aprovar pregadores e consultar membros locais.
 
-Pode:
-- Aprovar membros da própria Casa.
-- Aprovar alterações de cargo locais.
-- Pré-aprovar pregadores.
-- Consultar membros locais.
+Não pode emitir cartas nem aprovar pregadores em definitivo.
 
-Não pode:
-- Emitir cartas.
-- Aprovar pregadores em definitivo.
+### Congregação Local
 
-## Congregação Local
+Pode aprovar membros da Congregação e Casas subordinadas, aprovar alterações de cargo, pré-aprovar pregadores e consultar relatórios locais.
 
-Pode:
-- Aprovar membros da Congregação e Casas subordinadas.
-- Aprovar alterações de cargo.
-- Pré-aprovar pregadores.
-- Consultar relatórios locais.
+Não pode emitir cartas nem aprovar pregadores em definitivo.
 
-Não pode:
-- Emitir cartas.
-- Aprovar pregadores em definitivo.
+### Setorial
 
-## Setorial
-
-Pode:
-- Aprovar membros.
-- Aprovar cargos.
-- Aprovar pregadores.
-- Emitir cartas de pregação.
-- Suspender cartas.
-- Renovar cartas.
-- Gerenciar Congregações Locais e Casas de Oração.
+Pode aprovar membros, aprovar cargos, aprovar pregadores, emitir cartas de pregação, suspender cartas, renovar cartas e gerenciar Congregações Locais e Casas de Oração.
 
 É o aprovador final das cartas de pregação.
 
-## Regional
+### Regional
 
-Pode:
-- Consultar Setoriais subordinadas.
-- Consultar membros.
-- Consultar pregadores.
-- Consultar cartas emitidas.
-- Emitir relatórios regionais.
+Pode consultar Setoriais subordinadas, membros, pregadores, cartas emitidas e relatórios regionais.
 
-## Sede
+### Sede
 
-Controle total do sistema:
-- Gerenciar toda a estrutura.
-- Gerenciar usuários.
-- Gerenciar permissões.
-- Auditar aprovações.
-- Configurar regras globais.
+Controle total do sistema.
 
----
+## Carta de pregação
 
-# Carta de Pregação
+A carta planejada conterá nome completo, cargo, igreja de origem, número da carta, data de emissão, data de validade e QR Code de validação.
 
-A carta planejada conterá:
-- Nome completo
-- Cargo
-- Igreja de origem
-- Número da carta
-- Data de emissão
-- Data de validade
-- QR Code de validação
+No runtime atual, a carta é um registro com número, validade, status e URL de validação. A geração real de PDF, QR Code, assinatura, layout e armazenamento ainda precisa ser concluída.
 
-No runtime atual, a carta é um registro simples com número, validade, status e URL de validação. A geração real de PDF, QR Code, assinatura, layout e armazenamento ainda não está implementada.
-
----
-
-# Segurança
-
-- Senhas armazenadas como hash PBKDF2 no backend.
-- A autenticação em execução ainda é demonstrativa (`demo.*`/`dev-admin`); JWT assinado, expiração curta e refresh token rotacionável são pendências.
-- Parte das aprovações e alterações sensíveis registra auditoria.
-- O escopo de acesso por hierarquia está documentado, mas ainda precisa ser aplicado de forma robusta nos endpoints e serviços de aprovação.
-
----
-
-# Como executar a infraestrutura local
+## Como executar a infraestrutura local
 
 ```bash
 docker compose up -d db
 ```
 
-O banco é inicializado com as migrações em `database/migrations`. A especificação inicial da API está em `openapi/cadastroigreja.v1.yaml`.
+O banco é inicializado com as migrações em `database/migrations`. A especificação da API está em `openapi/cadastroigreja.v1.yaml`.
 
-> Estado real: o schema PostgreSQL existe e é validável, mas a API registra repositórios em memória no runtime atual. Os dados não persistem ao reiniciar a aplicação até que os repositórios PostgreSQL sejam implementados e plugados no DI.
+## Estado atual do projeto
 
-- Autenticação JWT real
-- Controle efetivo de permissões por cargo
-- Controle efetivo de permissões por nível hierárquico
-- Auditoria de ações
-- Histórico de aprovações
+O projeto possui backend ASP.NET Core, cliente Flutter, contrato OpenAPI, migration PostgreSQL e pipeline de CI. Antes de liberar uso por usuários finais, ainda é necessário concluir as regras produtivas de sessão, persistência, autorização hierárquica, emissão real de documentos e validação completa do frontend.
 
----
-
-# Roadmap
-
-## Fase 1
-- Cadastro de igrejas
-- Cadastro de membros
-- Login
-- Controle de cargos
-
-## Fase 2
-- Aprovação de membros
-- Aprovação de cargos
-- Solicitação de pregadores
-
-## Fase 3
-- Emissão de cartas
-- QR Code
-- Validação pública
-
-## Fase 4
-- Aplicativos móveis
-- Relatórios avançados
-- Notificações
-- Assinatura digital
-
----
-
-# Licença
-
-Projeto privado.
-
----
-
-# Estado atual do projeto
-
-O projeto possui documentação funcional, contrato inicial de API, Docker Compose para PostgreSQL e migration inicial do banco de dados. Consulte `docs/deployment-checklist.md` antes de publicar em servidor.
-
-Nesta fase, o MVP executável já possui backend ASP.NET Core, cliente Flutter, contrato OpenAPI, migration PostgreSQL e pipeline de CI; antes de liberar uso por usuários finais, faltam apenas as integrações produtivas de JWT assinado, persistência PostgreSQL em runtime, geração real de PDF/QR Code e configuração de ambiente.
-## Backend ASP.NET Core 9
-
-A solution inicial do backend foi criada em `CadastroIgreja.sln` seguindo as camadas planejadas:
-
-- `src/CadastroIgreja.Api`: Minimal API com endpoints alinhados ao contrato OpenAPI.
-- `src/CadastroIgreja.Application`: contratos, portas e casos de uso iniciais para autenticação, igrejas e usuários.
-- `src/CadastroIgreja.Domain`: entidades e enums do domínio.
-- `src/CadastroIgreja.Infrastructure`: repositórios em memória e serviços de senha/token para desenvolvimento.
-
-Endpoints implementados neste marco:
-
-- `POST /api/auth/register`
-- `POST /api/auth/login`
-- `GET /api/churches`
-- `POST /api/churches`
-- `GET /api/users/me`
-- `POST /api/users/{id}/approve`
-
-Os demais endpoints do OpenAPI foram mapeados como stubs autenticados para manter o contrato evolutivo da API.
-
+Consulte `docs/project-status.md` e `docs/deployment-checklist.md` antes de publicar em servidor.
